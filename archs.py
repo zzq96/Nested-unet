@@ -1,9 +1,11 @@
 import torch
 from torch import nn
+from utils import VOCSegmentation, load_data_VOCSegmentation
+__all__ = ["Unet"]
 
 class UnetBlock(nn.Module):
     def __init__(self, in_channels, middle_channels, out_channels):
-        super.__init__()
+        super(UnetBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, middle_channels, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(middle_channels)
         self.relu = nn.ReLU(inplace=True)
@@ -15,16 +17,16 @@ class UnetBlock(nn.Module):
         out = self.bn1(out)
         out = self.relu(out)
 
-        out = self.conv2(X)
-        out = self.bn2(X)
-        out = self.relu(X)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
 
         return out
     
 
 class Unet(nn.Module):
     def __init__(self, num_classes, in_channels=3):
-        super.__init__()
+        super(Unet, self).__init__()
         
         num_filter = [64, 128, 256, 512, 1024]
 
@@ -43,7 +45,7 @@ class Unet(nn.Module):
         self.conv0_4 = UnetBlock(num_filter[1] + num_filter[0], num_filter[0], num_filter[0])
 
         self.final = nn.Conv2d(num_filter[0], num_classes, kernel_size=1, stride=1)
-
+    
     def forward(self, X):
 
         x0_0 = self.conv0_0(X)
@@ -52,13 +54,16 @@ class Unet(nn.Module):
         x3_0 = self.conv3_0(self.pool(x2_0))
         x4_0 = self.conv4_0(self.pool(x3_0))
 
-        x3_1 = self.conv3_1(torch.cat(x3_0, self.up(x4_0), dim=1))
-        x2_2 = self.conv2_2(torch.cat(x2_0, self.up(x3_1), dim=1))
-        x1_3 = self.conv1_3(torch.cat(x1_0, self.up(x2_2), dim=1))
-        x0_4 = self.conv0_4(torch.cat(x0_0, self.up(x1_3), dim=1))
+        x3_1 = self.conv3_1(torch.cat([x3_0, self.up(x4_0)], dim=1))
+        x2_2 = self.conv2_2(torch.cat([x2_0, self.up(x3_1)], dim=1))
+        x1_3 = self.conv1_3(torch.cat([x1_0, self.up(x2_2)], dim=1))
+        x0_4 = self.conv0_4(torch.cat([x0_0, self.up(x1_3)], dim=1))
 
         output = self.final(x0_4)
         return output
 
 if __name__ == "__main__":
-    pass
+    train_iter, test_iter = load_data_VOCSegmentation(year="2011", batch_size=4, crop_size=(224, 224), 
+    root="Datasets/VOC", num_workers=4, use=1)
+    
+    

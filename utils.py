@@ -1,5 +1,6 @@
 import os
 import torch
+from torch import nn
 import random
 import numpy as np
 import PIL
@@ -29,8 +30,13 @@ class VOCSegmentation(VisionDataset):
     def __init__(self,
                  root,
                  year='2012',
-                 image_set='train', crop_size = None, use=1):
+                 image_set='train', crop_size = (224, 224), use=1):
+        """
+        use:int, 用1/use的数据集
+        """
         #super(VOCSegmentation, self).__init__(root, transforms, transform, target_transform)
+        if not os.path.isdir(root):
+            raise RuntimeError(root + 'is not a dir')
         self.crop_size = crop_size
         if crop_size:
             self.crop = MultiRandomCrop(crop_size)
@@ -191,3 +197,36 @@ class MultiRandomCrop(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '(size={0}, padding={1})'.format(self.size, self.padding)
+
+def load_data_VOCSegmentation(year='2012', batch_size = 62, crop_size=None, root='../../Datasets/VOC', num_workers=4, use=1):
+
+    print('year=%s, batch_size=%d'%(year, batch_size))
+    voc_train = VOCSegmentation(root=root, year=year, image_set='train', crop_size=crop_size, use=use)
+    print('已读取train, 共有%s张图片'%len(voc_train))
+    voc_val = VOCSegmentation(root=root, year=year, image_set='val', crop_size=crop_size, use=use)
+    print('已读取val, 共有%s张图片'%len(voc_val))
+    train_iter = torch.utils.data.DataLoader(voc_train, batch_size=batch_size, shuffle=True, num_workers= num_workers)
+    val_iter = torch.utils.data.DataLoader(voc_val, batch_size=batch_size, shuffle=True, num_workers= num_workers)
+    return train_iter, val_iter
+
+def init_weights(m):
+    classname = m.__class__.__name__
+    if classname.find("Conv") != -1:
+        nn.init.kaiming_normal_(m.weight.data)
+        if m.bias is not None:
+            m.bias.data.zero_()
+        
+def get_upsampling_weight(in_channels, out_channels, kernel_size):
+    """造一个双线性插值卷积核"""
+    """通过测试"""
+    factor = (kernel_size + 1)//2 # 采样因子
+    if kernel_size % 2 == 1:
+        center = factor - 1 #采样点
+    else:
+        center = factor - 0.5
+    
+    og = np.ogrid[:kernel_size, :kernel_size]
+    filt = (1 - abs(og[0] - center) / factor) * (1 - abs(og[1] - center) / factor) #根据像素点离采样点的远近分配权重
+    weight = np.zeros((in_channels, out_channels, kernel_size, kernel_size), dtype=np.float64)
+    weight[range(in_channels), range(out_channels), :, :] = filt
+    return torch.from_numpy(weight)
