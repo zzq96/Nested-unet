@@ -230,3 +230,21 @@ def get_upsampling_weight(in_channels, out_channels, kernel_size):
     weight = np.zeros((in_channels, out_channels, kernel_size, kernel_size), dtype=np.float64)
     weight[range(in_channels), range(out_channels), :, :] = filt
     return torch.from_numpy(weight)
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count

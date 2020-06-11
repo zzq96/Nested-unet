@@ -52,6 +52,17 @@ def label_accuracy_score(label_trues, label_preds, n_class):
     fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
     return acc, acc_cls, mean_iu, fwavacc
 
+def iou_score(scores, label):
+    iou = 0
+    eval_iou= 0
+    tmp = scores.max(dim=1)
+    label_pred = tmp[1].data.cpu().numpy()
+    label_true = label.data.cpu().numpy()
+    for lbt, lbp in zip(label_true, label_pred):
+        _, _, iou, _ = label_accuracy_score(lbt, lbp, scores.shape[1])
+        eval_iou += iou
+    return eval_iou / label.shape[0]
+
 def evaluate_accuracy(data_iter ,net, lossf, device):
     """
     Inputs:
