@@ -27,7 +27,7 @@ def parse_args():
     
     # model
     parser.add_argument('--gpu id', default=None, type=int,
-                         help='use which gpu')
+                         help='use which gpu, if id = -1, use cpu')
 
     parser.add_argument('--arch', '-a', metavar='ARCH', default='Unet',
                         choices=ARCH_NAMES,
@@ -52,6 +52,8 @@ def parse_args():
     #                     ' (default: BCEDiceLoss)')
     
     # dataset
+    parser.add_argument('--data_dir', default='../',
+                        help='dataset name')
     parser.add_argument('--dataset', default='VOC2011',
                         help='dataset name')
     parser.add_argument('--ratio', default= 1, type=int,
@@ -179,7 +181,7 @@ def train(config, train_iter, model, criterion, optimizer,device):
             ('iou', avg_meters['iou'].avg)
         ])
 
-def validate(config, train_iter, model, criterion, device):
+def validate(config, val_iter, model, criterion, device):
     avg_meters = {'loss':AverageMeter(),
     'iou':AverageMeter()
     }
@@ -187,8 +189,8 @@ def validate(config, train_iter, model, criterion, device):
     model.eval()
     
     with torch.no_grad():
-        pbar = tqdm(total=len(train_iter))
-        for X, labels in train_iter:
+        pbar = tqdm(total=len(val_iter))
+        for X, labels in val_iter:
             X = X.to(device)
             labels = labels.to(device)
             scores = model(X)
@@ -277,7 +279,7 @@ def main():
     #TODO:没考虑bn层的表现
     accumulation_steps = 1
     # gpu_id == None，说明使用cpu
-    device = torch.device("cuda" if config['gpu id'] != None else 'cpu')
+    device = torch.device("cuda" if config['gpu id'] != None and config['gpu id'] > 0 else 'cpu')
     if config['gpu id']:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(config['gpu id'])
 
@@ -302,7 +304,7 @@ def main():
         start_time = time.time()
         # train for one epoch
         train_log = train(config, train_iter, model, criterion, optimizer,device)
-        val_log = validate(config, train_iter, model, criterion, device)
+        val_log = validate(config, val_iter, model, criterion, device)
 
 
         if config['scheduler'] is not None:
@@ -318,10 +320,10 @@ def main():
         log['val_loss'].append(val_log['loss'])
         log['val_iou'].append(val_log['iou'])
 
-        pd.DataFrame(log).to_csv(os.path.join(exp_dir, cur_time + 'log.csv'), index=False)
+        pd.DataFrame(log).to_csv(os.path.join(exp_dir, cur_time + ' log.csv'), index=False)
 
         if val_log['iou'] >best_iou:
-            torch.save(model.state_dict(), os.path.join(exp_dir, cur_time + 'model.pth'))
+            torch.save(model.state_dict(), os.path.join(exp_dir, cur_time + ' model.pth'))
             best_iou = val_log['iou']
             print("=> saved best model")
         
