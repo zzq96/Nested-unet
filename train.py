@@ -227,22 +227,25 @@ def predict(model, test_imgs_dir, save_dir, epoch, config):
         for filename in os.listdir(test_imgs_dir):
             if 'jpg' not in filename:
                 continue
-            img = Image.open(test_imgs_dir + "/" + filename)#RGB模式
-            label = Image.open(test_imgs_dir + '/' + filename.replace('jpg', 'png'))
-            label = np.array(label)
+            img = Image.open(os.path.join(test_imgs_dir, filename))#RGB模式
+            label = Image.open(os.path.join(test_imgs_dir, filename.replace('jpg', 'png')))#P模式
+
+            #用最近邻缩放图片
             img = img.resize((config['input_w'], config['input_h']), Image.NEAREST)
+            label = label.resize((config['input_w'], config['input_h']), Image.NEAREST)
+
             img = torchvision.transforms.ToTensor()(img)
             img = torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
+
             score = model(img.resize(1, *img.shape)).squeeze()
             pre = score.max(dim=0)
-            label_pred = pre[1].data.cpu().numpy()
-            img = Image.fromarray(label_pred, 'P')
-            print(img.getpalette())
-            print()
-            img.putpalette(label.getpalette())
-            print(img.getpalette())
-            img.save(save_dir+'/'+str(epoch)+str(cnt)+'.png')
-            plt.imsave(save_dir+'/'+str(epoch)+str(cnt)+'.png', label_pred)
+            label_pred = pre[1].data.cpu().numpy().astype(np.uint8) 
+            label_pred = Image.fromarray(label_pred)
+
+            label_pred.putpalette(label.getpalette())
+            label_pred.save(save_dir+'/'+str(epoch)+str(cnt)+'.png')
+
+            # plt.imsave(save_dir+'/'+str(epoch)+str(cnt)+'.png', np.concatenate((label,label_pred), axis=1))
             cnt += 1
 
 
@@ -386,10 +389,10 @@ def main():
 if __name__ == '__main__':
     config = vars(parse_args())
     fcn = archs.FCN32s(21, 3)
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
-    #fcn.load_state_dict(torch.load('exps/FCN32s_VOC2011/2020-06-12 11:33:28/model.pth'))
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    fcn.load_state_dict(torch.load('Nested-unet/fcn32.pth'))
     fcn.to('cpu')
-    predict(fcn, 'test_imgs', "test", 0, config)
+    predict(fcn, 'Nested-unet/test_imgs', "Nested-unet/test", 0, config)
     #main()
 
     # torch.manual_seed(0)
