@@ -52,7 +52,7 @@ def parse_args():
     #                     ' (default: BCEDiceLoss)')
     
     # dataset
-    parser.add_argument('--data_dir', default='../',
+    parser.add_argument('--data_dir', default='.',
                         help='dataset name')
     parser.add_argument('--dataset', default='VOC2011',
                         help='dataset name')
@@ -217,22 +217,22 @@ def validate(config, val_iter, model, criterion, device):
 def main():
     config = vars(parse_args())
     if config['name'] is None:
-        config['name'] = '%s_%s' % (config['dataset'], config['arch'])
-    exp_dir = os.path.join(sys.path[0], 'exps',config['name'])
-    os.makedirs(exp_dir, exist_ok=True)
+        config['name'] = '%s_%s' % (config['arch'], config['dataset'])
     cur_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time)
+    os.makedirs(exp_dir, exist_ok=True)
     print('-' * 20)
     for key in config:
         print('%s:%s' %(key, config[key]))
     print('-' * 20)
     
-    with open(os.path.join(exp_dir, cur_time+' config.yml'), 'w') as f:
+    with open(os.path.join(exp_dir,'config.yml'), 'w') as f:
         yaml.dump(config, f)
     
     # define loss function
 
     #好像是可以加速
-    # cudnn.benchmark = True
+    cudnn.benchmark = True
 
     #create model
     print("=> creating model %s" % config['arch'])
@@ -255,10 +255,12 @@ def main():
     if 'VOC' in config['dataset']:
         if '2011' in config['dataset']:
             train_iter, val_iter = load_data_VOCSegmentation(year="2011", batch_size=config['batch_size'], \
-                crop_size=(config['input_h'], config['input_w']), root='Datasets/VOC/',num_workers=config['num_workers'], use=config['ratio'])
+                    crop_size=(config['input_h'], config['input_w']), \
+                    root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
         elif '2012' in config['dataset']:
             train_iter, val_iter = load_data_VOCSegmentation(year="2012", batch_size=config['batch_size'], \
-                crop_size=(config['input_h'], config['input_w']), root='Datasets/VOC/',num_workers=config['num_workers'], use=config['ratio'])
+                    crop_size=(config['input_h'], config['input_w']), \
+                    root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
         else:
             raise NotImplementedError
     else:
@@ -271,6 +273,8 @@ def main():
         ('train_iou',[]),
         ('val_loss',[]),
         ('val_iou',[]),
+        ('best_iou', []),
+        ('time', []),
     ])
 
     best_iou = 0
@@ -286,13 +290,6 @@ def main():
     model = model.to(device)
     print("training on", device)
 
-    # with torch.no_grad():
-        # net.eval()
-        # train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc = evaluate_accuracy(train_iter, net, loss_f, device)
-        # val_loss, val_acc, val_acc_cls,val_mean_iu, val_fwavacc = evaluate_accuracy(val_iter, net, loss_f, device)
-        # print("epoch: begin")
-        # print("train_loss: %f, train_acc: %f, train_acc_cls:%f, train_mean_iu:%f, train_fwavacc:%f" % (train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc))
-        # print("val_loss: %f, val_acc: %f, val_acc_cls:%f, val_mean_iu:%f, val_fwavacc:%f" % (val_loss, val_acc, val_acc_cls, val_mean_iu, val_fwavacc))
 
     #用于梯度累计的计数
     iter_cnt = 0
@@ -313,19 +310,22 @@ def main():
         print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
               % (train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
 
+
+        if val_log['iou'] >best_iou:
+            torch.save(model.state_dict(), os.path.join(exp_dir,'model.pth'))
+            best_iou = val_log['iou']
+            print("=> saved best model")
+
         log['epoch'].append(epoch)
         log['lr'].append(config['lr'])
         log['train_loss'].append(train_log['loss'])
         log['train_iou'].append(train_log['iou'])
         log['val_loss'].append(val_log['loss'])
         log['val_iou'].append(val_log['iou'])
+        log['best_iou'].append(best_iou)
+        log['time'].append(time.time() - start_time)
 
-        pd.DataFrame(log).to_csv(os.path.join(exp_dir, cur_time + ' log.csv'), index=False)
-
-        if val_log['iou'] >best_iou:
-            torch.save(model.state_dict(), os.path.join(exp_dir, cur_time + ' model.pth'))
-            best_iou = val_log['iou']
-            print("=> saved best model")
+        pd.DataFrame(log).to_csv(os.path.join(exp_dir,'log.csv'), index=False)
         
         torch.cuda.empty_cache()
 
