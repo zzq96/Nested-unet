@@ -297,6 +297,8 @@ def main():
 
     #loss函数
     criterion = nn.CrossEntropyLoss()
+    #每10轮，lr乘以0.1
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     for epoch in range(config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
@@ -304,6 +306,8 @@ def main():
         # train for one epoch
         train_log = train(config, train_iter, model, criterion, optimizer,device)
         val_log = validate(config, val_iter, model, criterion, device)
+
+        scheduler.step()
 
 
         if config['scheduler'] is not None:
@@ -319,7 +323,7 @@ def main():
             print("=> saved best model")
 
         log['epoch'].append(epoch)
-        log['lr'].append(config['lr'])
+        log['lr'].append(optimizer.param_groups[0]['lr'])
         log['train_loss'].append(train_log['loss'])
         log['train_iou'].append(train_log['iou'])
         log['val_loss'].append(val_log['loss'])
