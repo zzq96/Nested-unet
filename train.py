@@ -5,7 +5,7 @@ from torch import nn
 from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 import archs 
-from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop
+from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat
 from torch.optim import lr_scheduler
 from loss import *
 import sys
@@ -220,7 +220,6 @@ def predict(model, test_imgs_dir, save_dir, epoch, config):
 
     os.makedirs(save_dir, exist_ok=True)
     model.eval()
-    
     with torch.no_grad():
         print("test_imgs_dir:%s" % test_imgs_dir)
         cnt = 0
@@ -243,9 +242,9 @@ def predict(model, test_imgs_dir, save_dir, epoch, config):
             label_pred = Image.fromarray(label_pred)
 
             label_pred.putpalette(label.getpalette())
-            label_pred.save(save_dir+'/'+str(epoch)+str(cnt)+'.png')
-
-            # plt.imsave(save_dir+'/'+str(epoch)+str(cnt)+'.png', np.concatenate((label,label_pred), axis=1))
+            new_img = PILImageConcat(label, label_pred)
+            new_img.putpalette(label.getpalette())
+            new_img.save(save_dir+'/'+str(epoch)+ ' ' + str(cnt)+'.png')
             cnt += 1
 
 

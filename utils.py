@@ -105,6 +105,25 @@ class VOCSegmentation(VisionDataset):
     def __len__(self):
         return len(self.images)
 
+#现在只实现了横向拼接
+def PILImageConcat(*imgs):
+    for i in range(1, len(imgs)):
+        if imgs[0].size != imgs[1].size or imgs[0].mode != imgs[1].mode:
+            raise RuntimeError("拼接图像模式or长宽不匹配!")
+
+    # 单幅图像尺寸
+    width, height = imgs[0].size
+
+    # 创建空白长图
+    # result = Image.new(ims[0].mode, (width, height * len(ims)))
+    result = Image.new(imgs[0].mode, (width * len(imgs), height))
+
+    # 拼接图片
+    for i, img in enumerate(imgs):
+        result.paste(img, box=(i * width,0 ))
+
+    return result
+
 class MultiRandomCrop(object):
     """Crop the given PIL Image at a random location.
 
