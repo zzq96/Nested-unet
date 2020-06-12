@@ -16,6 +16,7 @@ python train.py \
 --lr 1e-4 \
 --weight_decay 0 \
 --momentum 0.9 \
+--test_imgs_dir test_imgs\
 
 
 

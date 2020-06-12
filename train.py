@@ -217,6 +217,9 @@ def validate(config, val_iter, model, criterion, device):
         ])
 
 def predict(model, test_imgs_dir, save_dir, epoch, config):
+#def predict(model, save_dir, epoch, config):
+
+    #test_imgs_dir = config['test_imgs_dir']
 
     os.makedirs(save_dir, exist_ok=True)
     model.eval()
@@ -326,9 +329,6 @@ def main():
     print("training on", device)
 
 
-    #用于显示的图片
-
-
     #用于梯度累计的计数
     iter_cnt = 0
 
@@ -344,9 +344,10 @@ def main():
         train_log = train(config, train_iter, model, criterion, optimizer,device)
         val_log = validate(config, val_iter, model, criterion, device)
 
-        predict(model, )
-
         scheduler.step()
+
+        predict(model, exp_dir, epoch, config)
+
 
 
         if config['scheduler'] is not None:
