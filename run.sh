@@ -7,14 +7,14 @@ python train.py \
 "--gpu id" 3 \
 --data_dir .. \
 --dataset VOC2011 \
---ratio 8 \
+--ratio 2 \
 --input_channels 3 \
 --num_classes 21 \
 --input_w 224 \
 --input_h 224 \
---optimizer SGD \
---lr 1e-3 \
---weight_decay 5e-4 \
+--optimizer Adam \
+--lr 1e-4 \
+--weight_decay 0 \
 --momentum 0.9 \
 
 

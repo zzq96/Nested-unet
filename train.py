@@ -238,6 +238,7 @@ def main():
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](config['num_classes'],
     config['input_channels'])
+    model.apply(init_weights)
 
     params = filter(lambda  p: p.requires_grad, model.parameters())
     if config['optimizer'] == "Adam":
@@ -294,6 +295,7 @@ def main():
     #用于梯度累计的计数
     iter_cnt = 0
 
+    #loss函数
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(config['epochs']):
