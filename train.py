@@ -1,10 +1,11 @@
 import torch
+import numpy as np
 import argparse
 from torch import nn
 from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 import archs 
-from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter
+from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop
 from torch.optim import lr_scheduler
 from loss import *
 import sys
@@ -13,6 +14,8 @@ import os
 from tqdm import tqdm
 import yaml
 import pandas as pd
+import cv2
+import matplotlib.pyplot as plt
 
 ARCH_NAMES = archs.__all__
 def parse_args():
@@ -213,6 +216,35 @@ def validate(config, val_iter, model, criterion, device):
             ('iou', avg_meters['iou'].avg)
         ])
 
+def predict(model, test_imgs_dir, save_dir, epoch, config):
+
+    os.makedirs(save_dir, exist_ok=True)
+    model.eval()
+    
+    with torch.no_grad():
+        print("test_imgs_dir:%s" % test_imgs_dir)
+        cnt = 0
+        for filename in os.listdir(test_imgs_dir):
+            if 'jpg' not in filename:
+                continue
+            img = Image.open(test_imgs_dir + "/" + filename)#RGB模式
+            label = Image.open(test_imgs_dir + '/' + filename.replace('jpg', 'png'))
+            label = np.array(label)
+            img = img.resize((config['input_w'], config['input_h']), Image.NEAREST)
+            img = torchvision.transforms.ToTensor()(img)
+            img = torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
+            score = model(img.resize(1, *img.shape)).squeeze()
+            pre = score.max(dim=0)
+            label_pred = pre[1].data.cpu().numpy()
+            img = Image.fromarray(label_pred, 'P')
+            print(img.getpalette())
+            print()
+            img.putpalette(label.getpalette())
+            print(img.getpalette())
+            img.save(save_dir+'/'+str(epoch)+str(cnt)+'.png')
+            plt.imsave(save_dir+'/'+str(epoch)+str(cnt)+'.png', label_pred)
+            cnt += 1
+
 
 def main():
     config = vars(parse_args())
@@ -292,6 +324,9 @@ def main():
     print("training on", device)
 
 
+    #用于显示的图片
+
+
     #用于梯度累计的计数
     iter_cnt = 0
 
@@ -306,6 +341,8 @@ def main():
         # train for one epoch
         train_log = train(config, train_iter, model, criterion, optimizer,device)
         val_log = validate(config, val_iter, model, criterion, device)
+
+        predict(model, )
 
         scheduler.step()
 
@@ -347,7 +384,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    config = vars(parse_args())
+    fcn = archs.FCN32s(21, 3)
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+    #fcn.load_state_dict(torch.load('exps/FCN32s_VOC2011/2020-06-12 11:33:28/model.pth'))
+    fcn.to('cpu')
+    predict(fcn, 'test_imgs', "test", 0, config)
+    #main()
+
     # torch.manual_seed(0)
     # torch.cuda.manual_seed(0)
     # train_iter, val_iter = load_data_VOCSegmentation(year="2011", batch_size=8, crop_size=(320, 480),\
