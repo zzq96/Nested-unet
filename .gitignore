@@ -3,3 +3,5 @@ exps
 test
 test_imgs
 *.pth
+Datasets
+.vscode/settings.json

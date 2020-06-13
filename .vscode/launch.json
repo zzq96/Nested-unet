@@ -1,0 +1,19 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: 当前文件",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args":["--epochs", "200", "--batch_size", "2", "--arch", "Unet", "--gpu id", "0",
+                "--data_dir",".", "--dataset", "VOC2011", "--ratio", "8","--input_channels", "3", 
+                "--num_classes", "21", "--input_h", "224", "--input_w", "224", 
+                "--optimizer", "Adam", "--lr", "1e-4", "--weight_decay", "0", "--momentum", "0.9", "--test_imgs_dir", "test_imgs"]
+        }
+    ]
+}

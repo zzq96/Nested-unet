@@ -55,6 +55,8 @@ def parse_args():
     #                     ' (default: BCEDiceLoss)')
     
     # dataset
+    parser.add_argument('--test_imgs_dir', default='.',
+                        help='test imgs dir')
     parser.add_argument('--data_dir', default='.',
                         help='dataset name')
     parser.add_argument('--dataset', default='VOC2011',
@@ -94,6 +96,7 @@ def parse_args():
                         metavar='N', help='early stopping (default: -1)')
     
     parser.add_argument('--num_workers', default=4, type=int)
+    parser.add_argument('--random_seed', default=0, type=int)
 
     config = parser.parse_args()
 
@@ -216,12 +219,9 @@ def validate(config, val_iter, model, criterion, device):
             ('iou', avg_meters['iou'].avg)
         ])
 
-def predict(model, test_imgs_dir, save_dir, epoch, config):
-#def predict(model, save_dir, epoch, config):
+def predict(model, save_dir, epoch, config, device):
 
-    #test_imgs_dir = config['test_imgs_dir']
-
-    os.makedirs(save_dir, exist_ok=True)
+    test_imgs_dir = config['test_imgs_dir']
     model.eval()
     with torch.no_grad():
         print("test_imgs_dir:%s" % test_imgs_dir)
@@ -239,7 +239,7 @@ def predict(model, test_imgs_dir, save_dir, epoch, config):
             img = torchvision.transforms.ToTensor()(img)
             img = torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
 
-            score = model(img.resize(1, *img.shape)).squeeze()
+            score = model(img.resize(1, *img.shape).to(device)).squeeze()
             pre = score.max(dim=0)
             label_pred = pre[1].data.cpu().numpy().astype(np.uint8) 
             label_pred = Image.fromarray(label_pred)
@@ -253,9 +253,14 @@ def predict(model, test_imgs_dir, save_dir, epoch, config):
 
 def main():
     config = vars(parse_args())
+
+    np.random.seed(config['random_seed'])
+    torch.random.manual_seed(config['random_seed'])
+    torch.cuda.manual_seed(config['random_seed'])
+
     if config['name'] is None:
         config['name'] = '%s_%s' % (config['arch'], config['dataset'])
-    cur_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    cur_time = time.strftime("%Y-%m-%d_%H.%M.%S", time.localtime())
     exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time)
     os.makedirs(exp_dir, exist_ok=True)
     print('-' * 20)
@@ -321,8 +326,8 @@ def main():
     #TODO:没考虑bn层的表现
     accumulation_steps = 1
     # gpu_id == None，说明使用cpu
-    device = torch.device("cuda" if config['gpu id'] != None and config['gpu id'] > 0 else 'cpu')
-    if config['gpu id']:
+    device = torch.device("cuda" if config['gpu id'] is not None and config['gpu id'] >=0 else 'cpu')
+    if device == "cuda":
         os.environ["CUDA_VISIBLE_DEVICES"] = str(config['gpu id'])
 
     model = model.to(device)
@@ -346,7 +351,7 @@ def main():
 
         scheduler.step()
 
-        predict(model, exp_dir, epoch, config)
+        predict(model, exp_dir, epoch, config, device)
 
 
 
@@ -387,13 +392,13 @@ def main():
 
 
 if __name__ == '__main__':
-    config = vars(parse_args())
-    fcn = archs.FCN32s(21, 3)
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-    fcn.load_state_dict(torch.load('Nested-unet/fcn32.pth'))
-    fcn.to('cpu')
-    predict(fcn, 'Nested-unet/test_imgs', "Nested-unet/test", 0, config)
-    #main()
+    #config = vars(parse_args())
+    #fcn = archs.FCN32s(21, 3)
+    #os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    #fcn.load_state_dict(torch.load('Nested-unet/fcn32.pth'))
+    #fcn.to('cpu')
+    #predict(fcn, 'Nested-unet/test_imgs', "Nested-unet/test", 0, config)
+    main()
 
     # torch.manual_seed(0)
     # torch.cuda.manual_seed(0)
