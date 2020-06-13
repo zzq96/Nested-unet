@@ -5,17 +5,21 @@ python train.py \
 --batch_size 16 \
 --arch Unet \
 "--gpu id" 3 \
---data_dir .. \
+--data_dir . \
 --dataset VOC2011 \
---ratio 2 \
+--ratio 1 \
 --input_channels 3 \
 --num_classes 21 \
---input_h 240 \
---input_w 320 \
+--input_h 224 \
+--input_w 224 \
 --optimizer Adam \
---lr 1e-4 \
+--lr 1e-3 \
 --weight_decay 0 \
 --momentum 0.9 \
+--scheduler ReduceLROnPlateau \
+--lr_gamma 0.1 \
+--patience 3 \
+--min_lr 1e-6 \
 --test_imgs_dir test_imgs\
 
 

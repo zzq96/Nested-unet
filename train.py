@@ -81,17 +81,17 @@ def parse_args():
     parser.add_argument('--weight_decay', default=0, type=float,
                         help='weight decay')
     # parser.add_argument('--nesterov', default=False, type=str2bool,
-                        # help='nesterov')
+    #                     help='nesterov')
 
     # scheduler
-    parser.add_argument('--scheduler', default=None,
-                        choices=['CosineAnnealingLR', 'ReduceLROnPlateau', 'MultiStepLR', 'ConstantLR'])
+    parser.add_argument('--scheduler', default='ConstantLR',
+                        choices=['CosineAnnealingLR', 'ReduceLROnPlateau', 'MultiStepLR', 'StepLR', 'ConstantLR'])
     parser.add_argument('--min_lr', default=1e-5, type=float,
                         help='minimum learning rate')
-    parser.add_argument('--factor', default=0.1, type=float)
+    #parser.add_argument('--factor', default=0.1, type=float)
     parser.add_argument('--patience', default=2, type=int)
     parser.add_argument('--milestones', default='1,2', type=str)
-    parser.add_argument('--gamma', default=2/3, type=float)
+    parser.add_argument('--lr_gamma', default=2/3, type=float)
     parser.add_argument('--early_stopping', default=-1, type=int,
                         metavar='N', help='early stopping (default: -1)')
     
@@ -280,7 +280,8 @@ def main():
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](config['num_classes'],
     config['input_channels'])
-    model.apply(init_weights)
+    if config['arch'] in ['Unet']:
+        model.apply(init_weights)
 
     params = filter(lambda  p: p.requires_grad, model.parameters())
     if config['optimizer'] == "Adam":
@@ -339,8 +340,24 @@ def main():
 
     #loss函数
     criterion = nn.CrossEntropyLoss()
-    #每10轮，lr乘以0.1
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    #学习率策略
+    if config['scheduler'] == 'CosineAnnealingLR':
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config['epochs'], eta_min=config['min_lr'])
+    elif config['scheduler'] == 'ReduceLROnPlateau':
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=config['lr_gamma'], patience=config['patience'],
+                                                   verbose=True, min_lr=config['min_lr'])
+    elif config['scheduler'] == 'MultiStepLR':
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[int(e) for e in config['milestones'].split(',')], gamma=config['lr_gamma'])
+    elif config['scheduler'] == 'StepLR':
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=config['step_size'], gamma=config['lr_gamma'])
+    elif config['scheduler'] == 'ConstantLR':
+        scheduler = None
+    else:
+        raise NotImplementedError
+
+    #在训练开始前看看输出是什么
+    predict(model, exp_dir, -1, config, device)
 
     for epoch in range(config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
@@ -349,14 +366,15 @@ def main():
         train_log = train(config, train_iter, model, criterion, optimizer,device)
         val_log = validate(config, val_iter, model, criterion, device)
 
-        scheduler.step()
+        if config['scheduler'] == 'ReduceLROnPlateau':
+            scheduler.step(val_log['loss'])
+        elif config['scheduler'] == 'ConstantLR':
+            pass
+        else:
+            scheduler.step()
+
 
         predict(model, exp_dir, epoch, config, device)
-
-
-
-        if config['scheduler'] is not None:
-            raise NotImplementedError
                 
         print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
               % (train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
