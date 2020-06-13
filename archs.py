@@ -3,7 +3,8 @@ from torch import nn
 from utils import VOCSegmentation, load_data_VOCSegmentation
 from utils import get_upsampling_weight
 import torchvision.models as models
-__all__ = ["Unet", "FCN32s"]
+from unet_utils import unetConv2, unetUp
+__all__ = ["Unet", "FCN32s", "unet"]
 
 class VGGBlock(nn.Module):
     def __init__(self, in_channels, middle_channels, out_channels):
@@ -44,7 +45,7 @@ class Unet(nn.Module):
         self.conv3_1 = VGGBlock(nb_filter[3]+nb_filter[4], nb_filter[3], nb_filter[3])
         self.conv2_2 = VGGBlock(nb_filter[2]+nb_filter[3], nb_filter[2], nb_filter[2])
         self.conv1_3 = VGGBlock(nb_filter[1]+nb_filter[2], nb_filter[1], nb_filter[1])
-        self.conv0_4 = VGGBlock(nb_filter[0]+nb_filter[1], nb_filter[0], nb_filter[0])
+        self.conv0_4 = VGGBlock(nb_filter[1], nb_filter[0], nb_filter[0])
 
         self.final = nn.Conv2d(nb_filter[0], num_classes, kernel_size=1)
 
@@ -59,11 +60,71 @@ class Unet(nn.Module):
         x3_1 = self.conv3_1(torch.cat([x3_0, self.up(x4_0)], 1))
         x2_2 = self.conv2_2(torch.cat([x2_0, self.up(x3_1)], 1))
         x1_3 = self.conv1_3(torch.cat([x1_0, self.up(x2_2)], 1))
-        x0_4 = self.conv0_4(torch.cat([x0_0, self.up(x1_3)], 1))
+        #x0_4 = self.conv0_4(torch.cat([x0_0, self.up(x1_3)], 1))
+        x0_4 = self.conv0_4(self.up(x1_3))
 
         output = self.final(x0_4)
         return output
 
+class unet(nn.Module):
+    def __init__(
+        self, feature_scale=4, num_classes=21, is_deconv=True, input_channels=3, is_batchnorm=True
+    ):
+        super(unet, self).__init__()
+        self.is_deconv = is_deconv
+        self.input_channels = input_channels
+        self.is_batchnorm = is_batchnorm
+        self.feature_scale = feature_scale
+
+        filters = [64, 128, 256, 512, 1024]
+        filters = [int(x / self.feature_scale) for x in filters]
+
+        # downsampling
+        self.conv1 = unetConv2(self.input_channels, filters[0], self.is_batchnorm)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv2 = unetConv2(filters[0], filters[1], self.is_batchnorm)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv3 = unetConv2(filters[1], filters[2], self.is_batchnorm)
+        self.maxpool3 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv4 = unetConv2(filters[2], filters[3], self.is_batchnorm)
+        self.maxpool4 = nn.MaxPool2d(kernel_size=2)
+
+        self.center = unetConv2(filters[3], filters[4], self.is_batchnorm)
+
+        # upsampling
+        self.up_concat4 = unetUp(filters[4], filters[3], self.is_deconv)
+        self.up_concat3 = unetUp(filters[3], filters[2], self.is_deconv)
+        self.up_concat2 = unetUp(filters[2], filters[1], self.is_deconv)
+        self.up_concat1 = unetUp(filters[1], filters[0], self.is_deconv)
+
+        # final conv (without any concat)
+        self.final = nn.Conv2d(filters[0], num_classes, 1)
+
+    def forward(self, inputs):
+        conv1 = self.conv1(inputs)
+        maxpool1 = self.maxpool1(conv1)
+
+        conv2 = self.conv2(maxpool1)
+        maxpool2 = self.maxpool2(conv2)
+
+        conv3 = self.conv3(maxpool2)
+        maxpool3 = self.maxpool3(conv3)
+
+        conv4 = self.conv4(maxpool3)
+        maxpool4 = self.maxpool4(conv4)
+
+        center = self.center(maxpool4)
+        up4 = self.up_concat4(conv4, center)
+        up3 = self.up_concat3(conv3, up4)
+        up2 = self.up_concat2(conv2, up3)
+        up1 = self.up_concat1(conv1, up2)
+
+        final = self.final(up1)
+
+        return final
 if __name__ == "__main__":
     train_iter, test_iter = load_data_VOCSegmentation(year="2011", batch_size=4, crop_size=(224, 224), 
     root="Datasets/VOC", num_workers=4, use=1)

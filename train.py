@@ -278,8 +278,8 @@ def main():
 
     #create model
     print("=> creating model %s" % config['arch'])
-    model = archs.__dict__[config['arch']](config['num_classes'],
-    config['input_channels'])
+    model = archs.__dict__[config['arch']](num_classes=config['num_classes'],
+    input_channels=config['input_channels'])
     if config['arch'] in ['Unet', 'NestedUnet']:
         model.apply(init_weights)
 

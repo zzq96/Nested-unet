@@ -5,3 +5,7 @@ test_imgs
 *.pth
 Datasets
 .vscode/settings.json
+Datasets.zip
+Desktop.ini
+._sync*
+Help document.txt
