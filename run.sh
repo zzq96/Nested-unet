@@ -4,7 +4,7 @@ python train.py \
 --epochs 200 \
 --batch_size 16 \
 --arch Unet \
-"--gpu id" 3 \
+"--gpu id" -1 \
 --data_dir . \
 --dataset VOC2011 \
 --ratio 1 \

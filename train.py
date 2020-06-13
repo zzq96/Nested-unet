@@ -280,7 +280,7 @@ def main():
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](config['num_classes'],
     config['input_channels'])
-    if config['arch'] in ['Unet']:
+    if config['arch'] in ['Unet', 'NestedUnet']:
         model.apply(init_weights)
 
     params = filter(lambda  p: p.requires_grad, model.parameters())

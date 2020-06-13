@@ -231,9 +231,12 @@ def load_data_VOCSegmentation(year='2012', batch_size = 62, crop_size=None, root
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
-        nn.init.kaiming_normal_(m.weight.data)
+        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
         if m.bias is not None:
             m.bias.data.zero_()
+    elif isinstance(m, nn.BatchNorm2d):
+        m.weight.data.fill_(1)
+        m.bias.data.zero_()
         
 def get_upsampling_weight(in_channels, out_channels, kernel_size):
     """造一个双线性插值卷积核"""
