@@ -9,6 +9,18 @@ import numbers
 import torchvision
 from torchvision.datasets.vision import VisionDataset
 from torchvision.transforms import functional as F
+def load_checkpoint(epoch, model, best_iou, optimizer, scheduler, checkpoint_PATH):
+
+    model_CKPT = torch.load(checkpoint_PATH)
+    epoch = model_CKPT['epoch']
+    model.load_state_dict(model_CKPT['state_dict'])
+    print('loading checkpoint!')
+    best_iou = model_CKPT['best_iou']
+    optimizer.load_state_dict(model_CKPT['optimizer'])
+    scheduler.load_state_dict(model_CKPT['scheduler'])
+
+    return epoch, model, best_iou, optimizer, scheduler
+
 class VOCSegmentation(VisionDataset):
     """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Segmentation Dataset.
 

@@ -381,8 +381,9 @@ def main():
 
 
         if val_log['iou'] >best_iou:
-            torch.save(model.state_dict(), os.path.join(exp_dir,'model.pth'))
             best_iou = val_log['iou']
+            torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
+            'optimizer':optimizer.state_dict(), 'scheduler' = scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
             print("=> saved best model")
 
         log['epoch'].append(epoch)
