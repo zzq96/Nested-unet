@@ -5,7 +5,7 @@ from torch import nn
 from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 import archs 
-from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat
+from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat, str2bool
 from torch.optim import lr_scheduler
 from loss import *
 import sys
@@ -37,7 +37,7 @@ def parse_args():
                         help='model architecture: ' +
                         ' | '.join(ARCH_NAMES) +
                         ' (default: Unet)')
-    # parser.add_argument('--deep_supervision', default=False, type=str2bool)
+    parser.add_argument('--deep_supervision', default=False, type=str2bool)
     parser.add_argument('--input_channels', default=3, type=int,
                          help='input channels')
     parser.add_argument('--num_classes', default=21, type=int,
@@ -383,7 +383,7 @@ def main():
         if val_log['iou'] >best_iou:
             best_iou = val_log['iou']
             torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
-            'optimizer':optimizer.state_dict(), 'scheduler' = scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
+            'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
             print("=> saved best model")
 
         log['epoch'].append(epoch)
