@@ -12,15 +12,16 @@ python train.py \
 --num_classes 21 \
 --input_h 224 \
 --input_w 224 \
---optimizer SGD \
---lr 1e-3 \
+--optimizer Adam \
+--lr 1e-4 \
 --weight_decay 0 \
 --momentum 0.9 \
 --scheduler ReduceLROnPlateau \
 --lr_gamma 0.5 \
---patience 2 \
+--patience 3 \
 --min_lr 1e-6 \
---test_imgs_dir test_imgs\
+--test_imgs_dir test_imgs \
+--random_seed 1337 \
 
 
 
