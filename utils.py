@@ -251,7 +251,7 @@ def load_data_VOCSegmentation(year='2012', batch_size = 62, crop_size=None, root
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:
-        nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+        nn.init.kaiming_uniform_(m.weight.data, nonlinearity='relu')
         if m.bias is not None:
             m.bias.data.zero_()
     elif isinstance(m, nn.BatchNorm2d):

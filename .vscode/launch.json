@@ -13,7 +13,7 @@
             "args":["--epochs", "200", "--batch_size", "1", "--arch", "NestedUnet", "--gpu id", "0",
                 "--data_dir",".", "--dataset", "VOC2011", "--ratio", "8","--input_channels", "3", 
                 "--num_classes", "21", "--input_h", "224", "--input_w", "224", 
-                "--optimizer", "SGD", "--lr", "5e-4", "--weight_decay", "5e-4", "--momentum", "0.99",
+                "--optimizer", "Adam", "--lr", "1e-2", "--weight_decay", "0", "--momentum", "0.9",
                 "--scheduler", "CosineAnnealingLR", "--lr_gamma", "0.1", "--patience", "3", "--min_lr", "1e-7",
                 "--test_imgs_dir", "test_imgs", "--random_seed", "1337"]
         }

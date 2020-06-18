@@ -80,8 +80,8 @@ def parse_args():
                         help='momentum')
     parser.add_argument('--weight_decay', default=0, type=float,
                         help='weight decay')
-    # parser.add_argument('--nesterov', default=False, type=str2bool,
-    #                     help='nesterov')
+    parser.add_argument('--nesterov', default=False, type=str2bool,
+                        help='nesterov')
 
     # scheduler
     parser.add_argument('--scheduler', default='ConstantLR',
@@ -224,7 +224,6 @@ def predict(model, save_dir, epoch, config, device):
     test_imgs_dir = config['test_imgs_dir']
     model.eval()
     with torch.no_grad():
-        print("test_imgs_dir:%s" % test_imgs_dir)
         cnt = 0
         for filename in os.listdir(test_imgs_dir):
             if 'jpg' not in filename:
