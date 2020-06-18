@@ -27,7 +27,7 @@ class VGGBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        if in_channels >= 128:
+        if hasattr(self, 'conv3'):
             out = self.conv3(out)
             out = self.bn3(out)
             out = self.relu(out)
