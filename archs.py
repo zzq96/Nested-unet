@@ -14,6 +14,10 @@ class VGGBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(middle_channels)
         self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
         self.bn2 = nn.BatchNorm2d(out_channels)
+        if in_channels >= 128:
+            self.conv3 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
+            self.bn3 = nn.BatchNorm2d(out_channels)
+
 
     def forward(self, x):
         out = self.conv1(x)
@@ -23,6 +27,10 @@ class VGGBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
+        if in_channels >= 128:
+            out = self.conv3(out)
+            out = self.bn3(out)
+            out = self.relu(out)
 
         return out
     

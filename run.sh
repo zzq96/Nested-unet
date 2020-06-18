@@ -13,7 +13,7 @@ python train.py \
 --num_classes 21 \
 --input_h 256 \
 --input_w 256 \
---optimizer Adam \
+--optimizer SGD \
 --lr 1e-2 \
 --weight_decay 0 \
 --momentum 0.9 \
