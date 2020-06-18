@@ -14,9 +14,6 @@ class VGGBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(middle_channels)
         self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
         self.bn2 = nn.BatchNorm2d(out_channels)
-        if in_channels >= 128:
-            self.conv3 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-            self.bn3 = nn.BatchNorm2d(out_channels)
 
 
     def forward(self, x):
@@ -27,10 +24,31 @@ class VGGBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        if hasattr(self, 'conv3'):
-            out = self.conv3(out)
-            out = self.bn3(out)
-            out = self.relu(out)
+        return out
+
+class VGGBlock3(nn.Module):
+    def __init__(self, in_channels, middle_channels, out_channels):
+        super().__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(in_channels, middle_channels, 3, padding=1)#不缩小特征图
+        self.bn1 = nn.BatchNorm2d(middle_channels)
+        self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.conv3 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
+        self.bn3 = nn.BatchNorm2d(out_channels)
+
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.conv3(out)
+        out = self.bn3(out)
+        out = self.relu(out)
 
         return out
     
@@ -87,18 +105,18 @@ class NestedUnet(nn.Module):
 
         self.conv0_0 = VGGBlock(input_channels, nb_filter[0], nb_filter[0])
         self.conv1_0 = VGGBlock(nb_filter[0], nb_filter[1], nb_filter[1])
-        self.conv2_0 = VGGBlock(nb_filter[1], nb_filter[2], nb_filter[2])
-        self.conv3_0 = VGGBlock(nb_filter[2], nb_filter[3], nb_filter[3])
-        self.conv4_0 = VGGBlock(nb_filter[3], nb_filter[4], nb_filter[4])
+        self.conv2_0 = VGGBlock3(nb_filter[1], nb_filter[2], nb_filter[2])
+        self.conv3_0 = VGGBlock3(nb_filter[2], nb_filter[3], nb_filter[3])
+        self.conv4_0 = VGGBlock3(nb_filter[3], nb_filter[4], nb_filter[4])
 
         self.conv0_1 = VGGBlock(nb_filter[0]+nb_filter[1], nb_filter[0], nb_filter[0])
         self.conv1_1 = VGGBlock(nb_filter[1]+nb_filter[2], nb_filter[1], nb_filter[1])
         self.conv2_1 = VGGBlock(nb_filter[2]+nb_filter[3], nb_filter[2], nb_filter[2])
-        self.conv3_1 = VGGBlock(nb_filter[3]+nb_filter[4], nb_filter[3], nb_filter[3])
+        self.conv3_1 = VGGBlock3(nb_filter[3]+nb_filter[4], nb_filter[3], nb_filter[3])
 
         self.conv0_2 = VGGBlock(nb_filter[0]*2+nb_filter[1], nb_filter[0], nb_filter[0])
         self.conv1_2 = VGGBlock(nb_filter[1]*2+nb_filter[2], nb_filter[1], nb_filter[1])
-        self.conv2_2 = VGGBlock(nb_filter[2]*2+nb_filter[3], nb_filter[2], nb_filter[2])
+        self.conv2_2 = VGGBlock3(nb_filter[2]*2+nb_filter[3], nb_filter[2], nb_filter[2])
 
         self.conv0_3 = VGGBlock(nb_filter[0]*3+nb_filter[1], nb_filter[0], nb_filter[0])
         self.conv1_3 = VGGBlock(nb_filter[1]*3+nb_filter[2], nb_filter[1], nb_filter[1])
