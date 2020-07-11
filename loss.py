@@ -54,7 +54,11 @@ def label_accuracy_score(label_trues, label_preds, n_class):
 
 def iou_score(scores, label):
     iou = 0
-    eval_iou= 0
+    acc = 0
+    acc_cls = 0
+    eval_iou = 0
+    eval_acc = 0
+    eval_acc_cls = 0
     tmp = scores.max(dim=1)
     label_pred = tmp[1].data.cpu().numpy()
     label_true = label.data.cpu().numpy()

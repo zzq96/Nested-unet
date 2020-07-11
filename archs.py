@@ -26,32 +26,6 @@ class VGGBlock(nn.Module):
         out = self.relu(out)
         return out
 
-class VGGBlock3(nn.Module):
-    def __init__(self, in_channels, middle_channels, out_channels):
-        super().__init__()
-        self.relu = nn.ReLU(inplace=True)
-        self.conv1 = nn.Conv2d(in_channels, middle_channels, 3, padding=1)#不缩小特征图
-        self.bn1 = nn.BatchNorm2d(middle_channels)
-        self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.conv3 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-        self.bn3 = nn.BatchNorm2d(out_channels)
-
-
-    def forward(self, x):
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-        out = self.bn3(out)
-        out = self.relu(out)
-
-        return out
-    
 
 class Unet(nn.Module):
     def __init__(self, num_classes, input_channels=3, **kwargs):
@@ -165,11 +139,11 @@ class NestedUnet(nn.Module):
     
 class FCN32s(nn.Module):
 
-    def __init__(self, num_classes, in_channels):
+    def __init__(self, num_classes, input_channels):
         super(FCN32s, self).__init__()
 
         assert num_classes > 0
-        self.conv1_1 = nn.Conv2d(in_channels, 64, 3, padding=100)
+        self.conv1_1 = nn.Conv2d(input_channels, 64, 3, padding=100)
         self.relu1_1 = nn.ReLU(inplace=True)
         self.conv1_2 = nn.Conv2d(64, 64, 3, padding=1)
         self.relu1_2 = nn.ReLU(inplace=True)

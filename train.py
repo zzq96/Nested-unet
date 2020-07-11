@@ -16,6 +16,7 @@ import yaml
 import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 
 ARCH_NAMES = archs.__all__
 def parse_args():
@@ -101,56 +102,6 @@ def parse_args():
     config = parser.parse_args()
 
     return config
-
-def trainer(net, train_iter, val_iter, loss_f, optimizer, scheduler, num_epochs, gpu_id = 0):
-
-    accumulation_steps = 1
-    # gpu_id == None，说明使用cpu
-    device = torch.device("cuda" if gpu_id != None else 'cpu')
-    if gpu_id:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-
-    net = net.to(device)
-    print("training on", device)
-    epoch_cnt = 0
-
-    with torch.no_grad():
-        net.eval()
-        train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc = evaluate_accuracy(train_iter, net, loss_f, device)
-        val_loss, val_acc, val_acc_cls,val_mean_iu, val_fwavacc = evaluate_accuracy(val_iter, net, loss_f, device)
-        print("epoch: begin")
-        print("train_loss: %f, train_acc: %f, train_acc_cls:%f, train_mean_iu:%f, train_fwavacc:%f" % (train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc))
-        print("val_loss: %f, val_acc: %f, val_acc_cls:%f, val_mean_iu:%f, val_fwavacc:%f" % (val_loss, val_acc, val_acc_cls, val_mean_iu, val_fwavacc))
-
-    for epoch in range(num_epochs):
-        start_time = time.time()
-        net.train()
-        for X, labels in train_iter:
-            epoch_cnt += 1
-
-            X = X.to(device)
-            labels = labels.to(device)
-            scores = net(X)
-            loss = loss_f(scores, labels)
-            #print("loss",loss.cpu().item())
-            loss = loss/accumulation_steps
-            loss.backward()
-            if epoch_cnt % accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-                #print("lr", optimizer.param_groups[0]['lr'])
-        scheduler.step()
-                
-
-        with torch.no_grad():
-            net.eval()
-            train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc = evaluate_accuracy(train_iter, net, loss_f, device)
-            val_loss, val_acc, val_acc_cls,val_mean_iu, val_fwavacc = evaluate_accuracy(val_iter, net, loss_f, device)
-            print("epoch: %d, time: %d sec" % (epoch + 1, time.time() - start_time))
-            print("lr", optimizer.param_groups[0]['lr'])
-            print("train_loss: %f, train_acc: %f, train_acc_cls:%f, train_mean_iu:%f, train_fwavacc:%f" % (train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc))
-            print("val_loss: %f, val_acc: %f, val_acc_cls:%f, val_mean_iu:%f, val_fwavacc:%f" % (val_loss, val_acc, val_acc_cls, val_mean_iu, val_fwavacc))
-
 
 def train(config, train_iter, model, criterion, optimizer,device):
     avg_meters = {'loss':AverageMeter(),
@@ -260,15 +211,13 @@ def main():
     if config['name'] is None:
         config['name'] = '%s_%s' % (config['arch'], config['dataset'])
     cur_time = time.strftime("%Y-%m-%d_%H.%M.%S", time.localtime())
+    #TODO:cur_time想想取什么目录名
     exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time)
-    os.makedirs(exp_dir, exist_ok=True)
     print('-' * 20)
     for key in config:
         print('%s:%s' %(key, config[key]))
     print('-' * 20)
     
-    with open(os.path.join(exp_dir,'config.yml'), 'w') as f:
-        yaml.dump(config, f)
     
     # define loss function
 
@@ -279,6 +228,8 @@ def main():
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](num_classes=config['num_classes'],
     input_channels=config['input_channels'])
+
+    #读取配置
     if config['arch'] in ['Unet', 'NestedUnet']:
         model.apply(init_weights)
 
@@ -355,8 +306,14 @@ def main():
     else:
         raise NotImplementedError
 
+    #创建实验结果保存目录
+    writer = SummaryWriter(exp_dir)
+    with open(os.path.join(exp_dir,'config.yml'), 'w') as f:
+        yaml.dump(config, f)
+
     #在训练开始前看看输出是什么
     predict(model, exp_dir, -1, config, device)
+
 
     for epoch in range(config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
@@ -384,6 +341,12 @@ def main():
             torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
             'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
             print("=> saved best model")
+
+        writer.add_scalar("Loss/train", train_log['loss'], epoch)
+        writer.add_scalar("Loss/val", val_log['loss'], epoch)
+        writer.add_scalar("iou/train", train_log['iou'], epoch)
+        writer.add_scalar("iou/val", val_log['iou'], epoch)
+        writer.add_scalar("iou/best_iou", best_iou, epoch)
 
         log['epoch'].append(epoch)
         log['lr'].append(optimizer.param_groups[0]['lr'])
