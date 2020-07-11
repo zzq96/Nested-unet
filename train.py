@@ -105,7 +105,9 @@ def parse_args():
 
 def train(config, train_iter, model, criterion, optimizer,device):
     avg_meters = {'loss':AverageMeter(),
-    'iou':AverageMeter()
+    'iou':AverageMeter(), 
+    'acc':AverageMeter(), 
+    'acc_cls':AverageMeter() 
     }
 
     model.train()
@@ -116,7 +118,7 @@ def train(config, train_iter, model, criterion, optimizer,device):
         labels = labels.to(device)
         scores = model(X)
         loss = criterion(scores, labels)
-        iou = iou_score(scores, labels)
+        acc, acc_cls, iou = iou_score(scores, labels)
 
         optimizer.zero_grad()
         loss.backward()
@@ -124,6 +126,8 @@ def train(config, train_iter, model, criterion, optimizer,device):
 
         avg_meters['loss'].update(loss.item(), X.size(0))
         avg_meters['iou'].update(iou, X.size(0))
+        avg_meters['acc'].update(acc, X.size(0))
+        avg_meters['acc_cls'].update(acc_cls, X.size(0))
 
         postfix = OrderedDict([
             ('loss', avg_meters['loss'].avg),
@@ -135,12 +139,16 @@ def train(config, train_iter, model, criterion, optimizer,device):
 
     return OrderedDict([
             ('loss', avg_meters['loss'].avg),
-            ('iou', avg_meters['iou'].avg)
+            ('iou', avg_meters['iou'].avg),
+            ('acc', avg_meters['acc'].avg),
+            ('acc_cls', avg_meters['acc_cls'].avg)
         ])
 
 def validate(config, val_iter, model, criterion, device):
     avg_meters = {'loss':AverageMeter(),
-    'iou':AverageMeter()
+    'iou':AverageMeter(),
+    'acc':AverageMeter(), 
+    'acc_cls':AverageMeter() 
     }
 
     model.eval()
@@ -152,10 +160,12 @@ def validate(config, val_iter, model, criterion, device):
             labels = labels.to(device)
             scores = model(X)
             loss = criterion(scores, labels)
-            iou = iou_score(scores, labels)
+            acc, acc_cls, iou = iou_score(scores, labels)
 
             avg_meters['loss'].update(loss.item(), X.size(0))
             avg_meters['iou'].update(iou, X.size(0))
+            avg_meters['acc'].update(acc, X.size(0))
+            avg_meters['acc_cls'].update(acc_cls, X.size(0))
 
             postfix = OrderedDict([
                 ('loss', avg_meters['loss'].avg),
@@ -167,7 +177,9 @@ def validate(config, val_iter, model, criterion, device):
 
     return OrderedDict([
             ('loss', avg_meters['loss'].avg),
-            ('iou', avg_meters['iou'].avg)
+            ('iou', avg_meters['iou'].avg),
+            ('acc', avg_meters['acc'].avg),
+            ('acc_cls', avg_meters['acc_cls'].avg)
         ])
 
 def predict(model, save_dir, epoch, config, device):
@@ -347,6 +359,10 @@ def main():
         writer.add_scalar("iou/train", train_log['iou'], epoch)
         writer.add_scalar("iou/val", val_log['iou'], epoch)
         writer.add_scalar("iou/best_iou", best_iou, epoch)
+        writer.add_scalar("acc/train", train_log['acc'], epoch)
+        writer.add_scalar("acc/val", val_log['acc'], epoch)
+        writer.add_scalar("acc_cls/train", train_log['acc_cls'], epoch)
+        writer.add_scalar("acc_cls/val", val_log['acc_cls'], epoch)
 
         log['epoch'].append(epoch)
         log['lr'].append(optimizer.param_groups[0]['lr'])

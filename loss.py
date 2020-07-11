@@ -63,9 +63,11 @@ def iou_score(scores, label):
     label_pred = tmp[1].data.cpu().numpy()
     label_true = label.data.cpu().numpy()
     for lbt, lbp in zip(label_true, label_pred):
-        _, _, iou, _ = label_accuracy_score(lbt, lbp, scores.shape[1])
+        acc, acc_cls, iou, _ = label_accuracy_score(lbt, lbp, scores.shape[1])
         eval_iou += iou
-    return eval_iou / label.shape[0]
+        eval_acc += acc
+        eval_acc_cls += acc_cls
+    return eval_acc / label.shape[0], eval_acc_cls / label.shape[0], eval_iou / label.shape[0]
 
 def evaluate_accuracy(data_iter ,net, lossf, device):
     """
