@@ -182,36 +182,51 @@ def validate(config, val_iter, model, criterion, device):
             ('acc_cls', avg_meters['acc_cls'].avg)
         ])
 
-def predict(model, save_dir, epoch, config, device):
+def predict(model, save_dir, epoch, config, device, writer):
 
     test_imgs_dir = config['test_imgs_dir']
     model.eval()
+    imgs = []
+    imgs_label = []
+    imgs_predict = []
+    imgs_score_map = []
+    palette = None
     with torch.no_grad():
-        cnt = 0
         for filename in os.listdir(test_imgs_dir):
             if 'jpg' not in filename:
                 continue
-            img = Image.open(os.path.join(test_imgs_dir, filename))#RGB模式
-            label = Image.open(os.path.join(test_imgs_dir, filename.replace('jpg', 'png')))#P模式
+            img_PIL = Image.open(os.path.join(test_imgs_dir, filename))#RGB模式
+            label_PIL = Image.open(os.path.join(test_imgs_dir, filename.replace('jpg', 'png')))#P模式
 
+            ##获取调色板    
+            if palette == None:
+                palette = label_PIL.getpalette()
             #用最近邻缩放图片
-            img = img.resize((config['input_w'], config['input_h']), Image.NEAREST)
-            label = label.resize((config['input_w'], config['input_h']), Image.NEAREST)
+            img_PIL = img_PIL.resize((config['input_w'], config['input_h']), Image.NEAREST)
+            label_PIL = label_PIL.resize((config['input_w'], config['input_h']), Image.NEAREST)
 
-            img = torchvision.transforms.ToTensor()(img)
-            img = torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
+            img_tensor = torchvision.transforms.ToTensor()(img_PIL)
+            img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
 
-            score = model(img.resize(1, *img.shape).to(device)).squeeze()
+            score = model(img_tensor.resize(1, *img_tensor.shape).to(device)).squeeze()
             pre = score.max(dim=0)
             label_pred = pre[1].data.cpu().numpy().astype(np.uint8) 
             label_pred = Image.fromarray(label_pred)
+            label_pred.putpalette(palette)
 
-            label_pred.putpalette(label.getpalette())
-            new_img = PILImageConcat(label, label_pred)
-            new_img.putpalette(label.getpalette())
-            new_img.save(save_dir+'/'+str(epoch)+ ' ' + str(cnt)+'.png')
-            cnt += 1
 
+            #label_pred.putpalette(label.getpalette())
+
+            imgs.append(np.array(img_PIL))
+            imgs_label.append(np.array(label_PIL.convert("RGB")))
+            imgs_predict.append(np.array(label_pred.convert("RGB")))
+            imgs_score_map.append(score[0])
+
+    if epoch == -1:
+        writer.add_images("0_True/original_img", np.stack(imgs, 0), epoch, dataformats="NHWC")
+        writer.add_images("0_True/imgs_label", np.stack(imgs_label, 0), epoch, dataformats="NHWC")
+    writer.add_images("1_Predict/imgs_predict", np.stack(imgs_predict, 0), epoch, dataformats="NHWC")
+    writer.add_images("1_Predict/imgs_score_map", np.expand_dims(np.stack(imgs_score_map, 0), -1), epoch, dataformats="NHWC")
 
 def main():
     config = vars(parse_args())
@@ -272,18 +287,6 @@ def main():
     else:
         raise NotImplementedError
 
-    log =  OrderedDict([
-        ('epoch',[]),
-        ('lr',[]),
-        ('train_loss',[]),
-        ('train_iou',[]),
-        ('val_loss',[]),
-        ('val_iou',[]),
-        ('best_iou', []),
-        ('time', []),
-    ])
-
-    best_iou = 0
             
     #累计梯度设置，1就是不累积
     #TODO:没考虑bn层的表现
@@ -324,8 +327,10 @@ def main():
         yaml.dump(config, f)
 
     #在训练开始前看看输出是什么
-    predict(model, exp_dir, -1, config, device)
+    predict(model, exp_dir, -1, config, device, writer)
 
+
+    best_iou = 0
 
     for epoch in range(config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
@@ -342,7 +347,7 @@ def main():
             scheduler.step()
 
 
-        predict(model, exp_dir, epoch, config, device)
+        predict(model, exp_dir, epoch, config, device, writer)
                 
         print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
               % (train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
@@ -356,36 +361,16 @@ def main():
 
         writer.add_scalar("Loss/train", train_log['loss'], epoch)
         writer.add_scalar("Loss/val", val_log['loss'], epoch)
-        writer.add_scalar("iou/train", train_log['iou'], epoch)
-        writer.add_scalar("iou/val", val_log['iou'], epoch)
-        writer.add_scalar("iou/best_iou", best_iou, epoch)
-        writer.add_scalar("acc/train", train_log['acc'], epoch)
-        writer.add_scalar("acc/val", val_log['acc'], epoch)
-        writer.add_scalar("acc_cls/train", train_log['acc_cls'], epoch)
-        writer.add_scalar("acc_cls/val", val_log['acc_cls'], epoch)
+        writer.add_scalar("mIoU/train", train_log['iou'], epoch)
+        writer.add_scalar("mIoU/val", val_log['iou'], epoch)
+        writer.add_scalar("mIoU/best_iou", best_iou, epoch)
+        writer.add_scalar("Acc/train", train_log['acc'], epoch)
+        writer.add_scalar("Acc/val", val_log['acc'], epoch)
+        writer.add_scalar("Acc_cls/train", train_log['acc_cls'], epoch)
+        writer.add_scalar("Acc_cls/val", val_log['acc_cls'], epoch)
 
-        log['epoch'].append(epoch)
-        log['lr'].append(optimizer.param_groups[0]['lr'])
-        log['train_loss'].append(train_log['loss'])
-        log['train_iou'].append(train_log['iou'])
-        log['val_loss'].append(val_log['loss'])
-        log['val_iou'].append(val_log['iou'])
-        log['best_iou'].append(best_iou)
-        log['time'].append(time.time() - start_time)
-
-        pd.DataFrame(log).to_csv(os.path.join(exp_dir,'log.csv'), index=False)
-        
         torch.cuda.empty_cache()
 
-        ##验证集上测试
-        # with torch.no_grad():
-            # model.eval()
-            # train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc = evaluate_accuracy(train_iter, model, criterion, device)
-            # val_loss, val_acc, val_acc_cls,val_mean_iu, val_fwavacc = evaluate_accuracy(val_iter, model, criterion, device)
-            # print("epoch: %d, time: %d sec" % (epoch + 1, time.time() - start_time))
-            # print("lr", optimizer.param_groups[0]['lr'])
-            # print("train_loss: %f, train_acc: %f, train_acc_cls:%f, train_mean_iu:%f, train_fwavacc:%f" % (train_loss, train_acc, train_acc_cls, train_mean_iu, train_fwavacc))
-            # print("val_loss: %f, val_acc: %f, val_acc_cls:%f, val_mean_iu:%f, val_fwavacc:%f" % (val_loss, val_acc, val_acc_cls, val_mean_iu, val_fwavacc))
 
 
 if __name__ == '__main__':

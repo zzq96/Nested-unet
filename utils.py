@@ -126,7 +126,7 @@ class VOCSegmentation(VisionDataset):
         return len(self.images)
 
 #现在只实现了横向拼接
-def PILImageConcat(*imgs):
+def PILImageConcat(imgs):
     for i in range(1, len(imgs)):
         if imgs[0].size != imgs[1].size or imgs[0].mode != imgs[1].mode:
             raise RuntimeError("拼接图像模式or长宽不匹配!")
