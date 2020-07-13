@@ -28,8 +28,10 @@ def predict(model, test_imgs_dir, save_dir, epoch, config, device):
             img = torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img)
 
             score = model(img.resize(1, *img.shape).to(device)).squeeze()
+            score = torch.softmax(score, dim=1)
             for i in range(21):
                 plt.imsave(save_dir+'/'+str(i)+ ' ' + str(cnt)+'.png', score[i])
+            a = score[0]
             #pre = score.max(dim=0)
             #label_pred = pre[1].data.cpu().numpy().astype(np.uint8) 
             #label_pred = Image.fromarray(label_pred)
@@ -42,7 +44,7 @@ def predict(model, test_imgs_dir, save_dir, epoch, config, device):
 if __name__ == "__main__":
 
     config = {'input_w':224, 'input_h':224}
-    unet = Unet(21, 3) 
-    unet.load_state_dict(torch.load(r'exps\Unet_VOC2011\2020-06-13_07.51.10\model.pth'))
+    unet = Unet(21, 3)
+    unet.load_state_dict(torch.load(r'exps/Unet_VOC2012/2020-07-12_21.22.41/model.pth')["state_dict"])
     unet.to('cpu')
     predict(unet, 'test_imgs', "test", -1, config, 'cpu')

@@ -208,9 +208,10 @@ def predict(model, save_dir, epoch, config, device, writer):
             img_tensor = torchvision.transforms.ToTensor()(img_PIL)
             img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
 
-            score = model(img_tensor.resize(1, *img_tensor.shape).to(device)).squeeze()
+            score = model(img_tensor.resize(1, *img_tensor.shape).to(device)).squeeze().cpu()
+            score = torch.softmax(score, dim=0)
             pre = score.max(dim=0)
-            label_pred = pre[1].data.cpu().numpy().astype(np.uint8) 
+            label_pred = pre[1].data.numpy().astype(np.uint8) 
             label_pred = Image.fromarray(label_pred)
             label_pred.putpalette(palette)
 
@@ -220,13 +221,14 @@ def predict(model, save_dir, epoch, config, device, writer):
             imgs.append(np.array(img_PIL))
             imgs_label.append(np.array(label_PIL.convert("RGB")))
             imgs_predict.append(np.array(label_pred.convert("RGB")))
-            imgs_score_map.append(score[0])
+            plt.imsave('tmp/score_map.png', score[0])
+            imgs_score_map.append(plt.imread("tmp/score_map.png")[:, :, :3])
 
     if epoch == -1:
         writer.add_images("0_True/original_img", np.stack(imgs, 0), epoch, dataformats="NHWC")
         writer.add_images("0_True/imgs_label", np.stack(imgs_label, 0), epoch, dataformats="NHWC")
     writer.add_images("1_Predict/imgs_predict", np.stack(imgs_predict, 0), epoch, dataformats="NHWC")
-    writer.add_images("1_Predict/imgs_score_map", np.expand_dims(np.stack(imgs_score_map, 0), -1), epoch, dataformats="NHWC")
+    writer.add_images("1_Predict/imgs_score_map", np.stack(imgs_score_map, 0), epoch, dataformats="NHWC")
 
 def main():
     config = vars(parse_args())
@@ -237,9 +239,10 @@ def main():
 
     if config['name'] is None:
         config['name'] = '%s_%s' % (config['arch'], config['dataset'])
-    cur_time = time.strftime("%Y-%m-%d_%H.%M.%S", time.localtime())
+    cur_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())[2:]
     #TODO:cur_time想想取什么目录名
-    exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time)
+    exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time + "_" + config["optimizer"] + "_lr_" + '{:0.0e}_'.format(config["lr"])+"wd_"+
+    '{:0.0e}'.format(config["weight_decay"]))
     print('-' * 20)
     for key in config:
         print('%s:%s' %(key, config[key]))
@@ -326,12 +329,22 @@ def main():
     with open(os.path.join(exp_dir,'config.yml'), 'w') as f:
         yaml.dump(config, f)
 
+    X, label = next(iter(train_iter))
+    writer.add_graph(model, X.to(device))
     #在训练开始前看看输出是什么
-    predict(model, exp_dir, -1, config, device, writer)
+    epoch = -1
+    predict(model, exp_dir, epoch, config, device, writer)
+    val_log = validate(config, val_iter, model, criterion, device)
+    writer.add_scalars('0_Loss', {"train":val_log['loss'], "val":val_log['loss']}, epoch)
+    writer.add_scalars('1_mIoU', {"train":val_log['iou'], "val":val_log['iou']}, epoch)
+    writer.add_scalar("1_mIoU/best_iou", val_log['iou'], epoch)
+
+    writer.add_scalars('2_Acc_cls', {"train":val_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+    writer.add_scalars('3_Acc', {"train":val_log['acc'], "val":val_log['acc']}, epoch)
 
 
+    #下面正式开始训练
     best_iou = 0
-
     for epoch in range(config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
         start_time = time.time()
@@ -359,15 +372,20 @@ def main():
             'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
             print("=> saved best model")
 
-        writer.add_scalar("Loss/train", train_log['loss'], epoch)
-        writer.add_scalar("Loss/val", val_log['loss'], epoch)
-        writer.add_scalar("mIoU/train", train_log['iou'], epoch)
-        writer.add_scalar("mIoU/val", val_log['iou'], epoch)
-        writer.add_scalar("mIoU/best_iou", best_iou, epoch)
-        writer.add_scalar("Acc/train", train_log['acc'], epoch)
-        writer.add_scalar("Acc/val", val_log['acc'], epoch)
-        writer.add_scalar("Acc_cls/train", train_log['acc_cls'], epoch)
-        writer.add_scalar("Acc_cls/val", val_log['acc_cls'], epoch)
+        # writer.add_scalar("Loss/train", train_log['loss'], epoch)
+        # writer.add_scalar("Loss/val", val_log['loss'], epoch)
+        #writer.add_scalar("mIoU/train", train_log['iou'], epoch)
+        #writer.add_scalar("mIoU/val", val_log['iou'], epoch)
+        writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
+        writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
+        writer.add_scalar("1_mIoU/best_iou", best_iou, epoch)
+
+        writer.add_scalars('2_Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+        writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
+        # writer.add_scalar("Acc/train", train_log['acc'], epoch)
+        # writer.add_scalar("Acc/val", val_log['acc'], epoch)
+        # writer.add_scalar("Acc_cls/train", train_log['acc_cls'], epoch)
+        # writer.add_scalar("Acc_cls/val", val_log['acc_cls'], epoch)
 
         torch.cuda.empty_cache()
 

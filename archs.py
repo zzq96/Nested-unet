@@ -4,7 +4,7 @@ from utils import VOCSegmentation, load_data_VOCSegmentation
 from utils import get_upsampling_weight
 import torchvision.models as models
 from unet_utils import unetConv2, unetUp
-__all__ = ["Unet", "FCN32s", "unet", "NestedUnet"]
+__all__ = ["Unet", "FCN32s", "NestedUnet"]
 
 class VGGBlock(nn.Module):
     def __init__(self, in_channels, middle_channels, out_channels):
