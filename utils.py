@@ -117,6 +117,10 @@ class VOCSegmentation(VisionDataset):
                 img, target = self.crop(img, target)
 
         # img, target = self.To_Tensor(img), self.To_Tensor(target)
+        if random.random() < 0.5:
+            img = F.hflip(img)
+            target = F.hflip(target)
+
         img, target = self.To_Tensor(img), torch.from_numpy(np.array(target))
         target[target==255] = 0
 

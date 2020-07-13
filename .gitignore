@@ -10,3 +10,5 @@ Desktop.ini
 ._sync*
 Help document.txt
 test.py
+tmp/*
+tmp/score_map.png

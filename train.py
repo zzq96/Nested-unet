@@ -250,6 +250,13 @@ def main():
     
     
     # define loss function
+    # gpu_id == None，说明使用cpu
+    if config['gpu id'] is not None and config['gpu id'] >=0:
+        device = torch.device("cuda")
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(config['gpu id'])
+        print(os.environ["CUDA_VISIBLE_DEVICES"])
+    else:
+        device = torch.device("cpu")
 
     #好像是可以加速
     cudnn.benchmark = True
@@ -294,10 +301,6 @@ def main():
     #累计梯度设置，1就是不累积
     #TODO:没考虑bn层的表现
     accumulation_steps = 1
-    # gpu_id == None，说明使用cpu
-    device = torch.device("cuda" if config['gpu id'] is not None and config['gpu id'] >=0 else 'cpu')
-    if device == "cuda":
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(config['gpu id'])
 
     model = model.to(device)
     print("training on", device)

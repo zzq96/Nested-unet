@@ -3,7 +3,7 @@ source /home/zqzhou/disk/miniconda3/bin/activate learn
 python train.py \
 --epochs 500 \
 --batch_size 16 \
---arch FCN32s \
+--arch FCN8s \
 --deep_supervision False \
 "--gpu id" 0 \
 --data_dir . \
@@ -11,8 +11,8 @@ python train.py \
 --ratio 1 \
 --input_channels 3 \
 --num_classes 21 \
---input_h 256 \
---input_w 256 \
+--input_h 250 \
+--input_w 250 \
 --optimizer SGD \
 --lr 1e-2 \
 --weight_decay 5e-4 \
