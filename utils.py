@@ -17,15 +17,19 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def load_checkpoint(epoch, model, best_iou, optimizer, scheduler, checkpoint_PATH):
+def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, optimizer = None, scheduler = None):
 
     model_CKPT = torch.load(checkpoint_PATH)
-    epoch = model_CKPT['epoch']
+    if epoch is not None:
+        epoch = model_CKPT['epoch']
     model.load_state_dict(model_CKPT['state_dict'])
     print('loading checkpoint!')
-    best_iou = model_CKPT['best_iou']
-    optimizer.load_state_dict(model_CKPT['optimizer'])
-    scheduler.load_state_dict(model_CKPT['scheduler'])
+    if epoch is not None:
+        best_iou = model_CKPT['best_iou']
+    if epoch is not None:
+        optimizer.load_state_dict(model_CKPT['optimizer'])
+    if epoch is not None:
+        scheduler.load_state_dict(model_CKPT['scheduler'])
 
     return epoch, model, best_iou, optimizer, scheduler
 

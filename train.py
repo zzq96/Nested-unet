@@ -5,7 +5,7 @@ from torch import nn
 from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 import archs 
-from utils import load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat, str2bool
+from utils import load_checkpoint,  load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat, str2bool
 from torch.optim import lr_scheduler
 from loss import *
 import sys
@@ -42,6 +42,7 @@ def parse_args():
                         ' | '.join(ARCH_NAMES) +
                         ' (default: Unet)')
     parser.add_argument('--fuse_attention', default=False, type=str2bool)
+    parser.add_argument('--checkpoint_PATH', default=None)
     parser.add_argument('--input_channels', default=3, type=int,
                          help='input channels')
     parser.add_argument('--num_classes', default=21, type=int,
@@ -298,10 +299,9 @@ def main():
     model = archs.__dict__[config['arch']](num_classes=num_classes,
     input_channels=config['input_channels'], fuse_attention=config['fuse_attention'])
     model = model.to(device)
+    if config['checkpoint_PATH'] is not None:
+        _, model, _, _, _ = load_checkpoint(model, config['checkpoint_PATH'])
     print("training on", device)
-
-    if config['arch'] in ['Unet', 'NestedUnet']:
-        model.apply(init_weights)
 
     params = filter(lambda  p: p.requires_grad, model.parameters())
     if config['optimizer'] == "Adam":
