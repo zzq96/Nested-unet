@@ -41,7 +41,7 @@ def parse_args():
                         help='model architecture: ' +
                         ' | '.join(ARCH_NAMES) +
                         ' (default: Unet)')
-    parser.add_argument('--deep_supervision', default=False, type=str2bool)
+    parser.add_argument('--fuse_attention', default=False, type=str2bool)
     parser.add_argument('--input_channels', default=3, type=int,
                          help='input channels')
     parser.add_argument('--num_classes', default=21, type=int,
@@ -245,8 +245,9 @@ def main():
         config['name'] = '%s_%s' % (config['arch'], config['dataset'])
     cur_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())[2:]
     #TODO:cur_time想想取什么目录名
-    exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time + "_" + config["optimizer"] + "_lr_" + '{:0.0e}_'.format(config["lr"])+"wd_"+
-    '{:0.0e}'.format(config["weight_decay"]))
+    exp_dir = os.path.join(sys.path[0], 'exps',config['name'], cur_time + "_" + \
+        config["optimizer"] + "_lr_" + '{:0.0e}_'.format(config["lr"])+"wd_"+
+        '{:0.0e}'.format(config["weight_decay"]) + '_fa_' + str(config['fuse_attention']))
     print('-' * 20)
     for key in config:
         print('%s:%s' %(key, config[key]))
@@ -287,20 +288,6 @@ def main():
     val_iter = data.DataLoader(testset, batch_size=config["batch_size"],
                                         drop_last=False, shuffle=False, **kwargs)
     num_classes = trainset.num_class
-    #if 'VOC' in config['dataset']:
-    #    if '2011' in config['dataset']:
-    #        train_iter, val_iter = load_data_VOCSegmentation(year="2011", batch_size=config['batch_size'], \
-    #                crop_size=(config['input_h'], config['input_w']), \
-    #                root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
-    #    elif '2012' in config['dataset']:
-    #        train_iter, val_iter = load_data_VOCSegmentation(year="2012", batch_size=config['batch_size'], \
-    #                crop_size=(config['input_h'], config['input_w']), \
-    #                root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
-    #    else:
-    #        raise NotImplementedError
-    #else:
-    #    raise NotImplementedError
-
             
     #累计梯度设置，1就是不累积
     #TODO:没考虑bn层的表现
@@ -309,7 +296,7 @@ def main():
     #create model
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](num_classes=num_classes,
-    input_channels=config['input_channels'])
+    input_channels=config['input_channels'], fuse_attention=config['fuse_attention'])
     model = model.to(device)
     print("training on", device)
 

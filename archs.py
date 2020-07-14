@@ -4,6 +4,7 @@ from utils import VOCSegmentation, load_data_VOCSegmentation
 from utils import get_upsampling_weight
 import torchvision.models as models
 from unet_utils import unetConv2, unetUp
+from encoding.nn.attention import Fuse_Attention
 __all__ = ["Unet", "FCN32s", "FCN8s", "NestedUnet"]
 
 class VGGBlock(nn.Module):
@@ -289,8 +290,12 @@ class FCN32s(nn.Module):
 
 class FCN8s(nn.Module):
 
-    def __init__(self, num_classes, input_channels):
+    def __init__(self, num_classes, input_channels, fuse_attention = False):
         super(FCN8s, self).__init__()
+        self.fuse_attention =  fuse_attention 
+        if self.fuse_attention:
+            self.fuse_s16 = Fuse_Attention(deep_dim=21, shallow_dim=512)
+            self.fuse_s8 = Fuse_Attention(deep_dim=21, shallow_dim=256)
 
         assert num_classes > 0
         self.conv1_1 = nn.Conv2d(input_channels, 64, 3, padding=100)
@@ -388,13 +393,13 @@ class FCN8s(nn.Module):
         h = self.relu3_2(self.conv3_2(h))
         h = self.relu3_3(self.conv3_3(h))
         h = self.pool3(h)
-        s8 = self.score_fr3(h)
+        s8 = h
 
         h = self.relu4_1(self.conv4_1(h))
         h = self.relu4_2(self.conv4_2(h))
         h = self.relu4_3(self.conv4_3(h))
         h = self.pool4(h)
-        s16 = self.score_fr2(h)
+        s16 = h
 
         h = self.relu5_1(self.conv5_1(h))
         h = self.relu5_2(self.conv5_2(h))
@@ -405,16 +410,25 @@ class FCN8s(nn.Module):
         h = self.drop6(h)
         h = self.relu7(self.fc7(h))
         h = self.drop7(h)
+        s32 = h
 
-        s32_ = self.score_fr1(h)
+        s32_ = self.score_fr1(s32)
 
         s16_ = self.upscore_2x(s32_)        
         s16 = s16[:,:, 5 : 5 + s16_.size()[2], 5 : 5 + s16_.size()[3]]
-        s16_ = s16 + s16_
+        if self.fuse_attention :
+            s16_ = self.fuse_s16(s16_, s16)
+        else:
+            s16 = self.score_fr2(s16)
+            s16_ = s16 + s16_
 
         s8_ = self.upscore_4x(s16_)
         s8 = s8[:,:, 9 : 9 + s8_.size()[2], 9 : 9 + s8_.size()[3]]
-        s8_ = s8_ + s8
+        if self.fuse_attention :
+            s8_ = self.fuse_s8(s8_, s8)
+        else:
+            s8 = self.score_fr3(s8)
+            s8_ = s8 + s8_
 
         h = self.upscore_32x(s8_)
         h = h[:, :, 31:31 + X.size()[2], 31:31 + X.size()[3]].contiguous()
