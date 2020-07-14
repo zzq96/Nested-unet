@@ -46,6 +46,7 @@ class BaseDataset(data.Dataset):
     def pred_offset(self):
         raise NotImplemented
 
+    #对图片进行裁剪，如果本身就比cropsize小，就等比例缩放后再crop
     def _val_sync_transform(self, img, mask):
         outsize = self.crop_size
         short_size = outsize
@@ -67,6 +68,7 @@ class BaseDataset(data.Dataset):
         # final transform
         return img, self._mask_transform(mask)
 
+    #对训练集的图片和label同时进行数据增强（左右翻转， scale放大缩小，随机裁剪）， 
     def _sync_transform(self, img, mask):
         # random mirror
         if random.random() < 0.5:
@@ -95,7 +97,7 @@ class BaseDataset(data.Dataset):
             padh = crop_size - oh if oh < crop_size else 0
             padw = crop_size - ow if ow < crop_size else 0
             img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
-            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=255)#pad 255 for cityscapes
+            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=255)#pad 255 for cityscapes, voc
         # random crop crop_size
         w, h = img.size
         x1 = random.randint(0, w - crop_size)

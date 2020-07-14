@@ -11,4 +11,4 @@ Desktop.ini
 Help document.txt
 test.py
 tmp/*
-tmp/score_map.png
+*.tgz

@@ -4,6 +4,7 @@ import scipy.io
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 
+import torch
 from .base import BaseDataset
 
 class VOCAugSegmentation(BaseDataset):
@@ -14,8 +15,8 @@ class VOCAugSegmentation(BaseDataset):
         'tv'
     ]
     NUM_CLASS = 21
-    TRAIN_BASE_DIR = 'VOCaug/dataset/'
-    def __init__(self, root, split='train', mode=None, transform=None, 
+    TRAIN_BASE_DIR = 'VOCaug/'
+    def __init__(self, root = 'Datasets', split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):
         super(VOCAugSegmentation, self).__init__(root, split, mode, transform,
                                                  target_transform, **kwargs)
@@ -24,7 +25,7 @@ class VOCAugSegmentation(BaseDataset):
         _mask_dir = os.path.join(_voc_root, 'cls')
         _image_dir = os.path.join(_voc_root, 'img')
         if self.mode == 'train':
-            _split_f = os.path.join(_voc_root, 'trainval.txt')
+            _split_f = os.path.join(_voc_root, 'train.txt')
         elif self.mode == 'val':
             _split_f = os.path.join(_voc_root, 'val.txt')
         else:
@@ -67,6 +68,12 @@ class VOCAugSegmentation(BaseDataset):
             struct_as_record=False)
         mask = mat['GTcls'].Segmentation
         return Image.fromarray(mask)
+
+    def _mask_transform(self, mask):
+        target = np.array(mask).astype('int32')
+        #target[target == 255] = -1
+        target[target == 255] = 0
+        return torch.from_numpy(target).long()
 
     def __len__(self):
         return len(self.images)

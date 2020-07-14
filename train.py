@@ -17,6 +17,9 @@ import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+from encoding.datasets import get_segmentation_dataset
+from torchvision import transforms
+from torch.utils import data
 
 ARCH_NAMES = archs.__all__
 def parse_args():
@@ -43,10 +46,11 @@ def parse_args():
                          help='input channels')
     parser.add_argument('--num_classes', default=21, type=int,
                         help='number of classes')
-    parser.add_argument('--input_w', default=224, type=int,
-                        help='image width')
-    parser.add_argument('--input_h', default=224, type=int,
-                        help='image height')
+    parser.add_argument('--base_size', default=300, type=int,
+                        help='image base_size')
+    parser.add_argument('--crop_size', default=224, type=int,
+                        help='image crop size')
+    parser.add_argument('--scale', default=True, type=str2bool)
     
     # loss
     # parser.add_argument('--loss', default='BCEDiceLoss',
@@ -59,8 +63,8 @@ def parse_args():
     parser.add_argument('--test_imgs_dir', default='.',
                         help='test imgs dir')
     parser.add_argument('--data_dir', default='.',
-                        help='dataset name')
-    parser.add_argument('--dataset', default='VOC2011',
+                        help='dataset dir')
+    parser.add_argument('--dataset', default='voc2011',
                         help='dataset name')
     parser.add_argument('--ratio', default= 1, type=int,
                         help='only use 1/ratio\'s dataset')
@@ -202,8 +206,8 @@ def predict(model, save_dir, epoch, config, device, writer):
             if palette == None:
                 palette = label_PIL.getpalette()
             #用最近邻缩放图片
-            img_PIL = img_PIL.resize((config['input_w'], config['input_h']), Image.NEAREST)
-            label_PIL = label_PIL.resize((config['input_w'], config['input_h']), Image.NEAREST)
+            img_PIL = img_PIL.resize((config['crop_size'], config['crop_size']), Image.NEAREST)
+            label_PIL = label_PIL.resize((config['crop_size'], config['crop_size']), Image.NEAREST)
 
             img_tensor = torchvision.transforms.ToTensor()(img_PIL)
             img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
@@ -249,7 +253,6 @@ def main():
     print('-' * 20)
     
     
-    # define loss function
     # gpu_id == None，说明使用cpu
     if config['gpu id'] is not None and config['gpu id'] >=0:
         device = torch.device("cuda")
@@ -261,12 +264,55 @@ def main():
     #好像是可以加速
     cudnn.benchmark = True
 
-    #create model
-    print("=> creating model %s" % config['arch'])
-    model = archs.__dict__[config['arch']](num_classes=config['num_classes'],
-    input_channels=config['input_channels'])
 
     #读取配置
+
+    #读取数据集，现在只有VOC
+    input_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([.485, .456, .406], [.229, .224, .225])])
+    # dataset
+    data_kwargs = {'transform': input_transform, 'root':config['data_dir'], 'base_size': config["base_size"],
+                    'crop_size': config["crop_size"], 'logger': None, 'scale': config["scale"]}
+
+    trainset = get_segmentation_dataset(config["dataset"], split='train', mode='train',
+                                        **data_kwargs)
+    testset = get_segmentation_dataset(config["dataset"], split='val', mode='val',
+                                        **data_kwargs)
+    # dataloader
+    kwargs = {'num_workers': config["num_workers"], 'pin_memory': True} \
+        if config['gpu id'] >= 0 else {}
+    train_iter = data.DataLoader(trainset, batch_size=config["batch_size"],
+                                        drop_last=True, shuffle=True, **kwargs)
+    val_iter = data.DataLoader(testset, batch_size=config["batch_size"],
+                                        drop_last=False, shuffle=False, **kwargs)
+    num_classes = trainset.num_class
+    #if 'VOC' in config['dataset']:
+    #    if '2011' in config['dataset']:
+    #        train_iter, val_iter = load_data_VOCSegmentation(year="2011", batch_size=config['batch_size'], \
+    #                crop_size=(config['input_h'], config['input_w']), \
+    #                root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
+    #    elif '2012' in config['dataset']:
+    #        train_iter, val_iter = load_data_VOCSegmentation(year="2012", batch_size=config['batch_size'], \
+    #                crop_size=(config['input_h'], config['input_w']), \
+    #                root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
+    #    else:
+    #        raise NotImplementedError
+    #else:
+    #    raise NotImplementedError
+
+            
+    #累计梯度设置，1就是不累积
+    #TODO:没考虑bn层的表现
+    accumulation_steps = 1
+
+    #create model
+    print("=> creating model %s" % config['arch'])
+    model = archs.__dict__[config['arch']](num_classes=num_classes,
+    input_channels=config['input_channels'])
+    model = model.to(device)
+    print("training on", device)
+
     if config['arch'] in ['Unet', 'NestedUnet']:
         model.apply(init_weights)
 
@@ -281,29 +327,6 @@ def main():
         )
     else:
         raise NotImplementedError
-
-    #读取数据集，现在只有VOC
-    if 'VOC' in config['dataset']:
-        if '2011' in config['dataset']:
-            train_iter, val_iter = load_data_VOCSegmentation(year="2011", batch_size=config['batch_size'], \
-                    crop_size=(config['input_h'], config['input_w']), \
-                    root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
-        elif '2012' in config['dataset']:
-            train_iter, val_iter = load_data_VOCSegmentation(year="2012", batch_size=config['batch_size'], \
-                    crop_size=(config['input_h'], config['input_w']), \
-                    root=os.path.join(config['data_dir'],'Datasets/VOC/'),num_workers=config['num_workers'], use=config['ratio'])
-        else:
-            raise NotImplementedError
-    else:
-        raise NotImplementedError
-
-            
-    #累计梯度设置，1就是不累积
-    #TODO:没考虑bn层的表现
-    accumulation_steps = 1
-
-    model = model.to(device)
-    print("training on", device)
 
 
     #用于梯度累计的计数

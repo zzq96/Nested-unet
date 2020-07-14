@@ -14,7 +14,7 @@ python train.py \
 --input_h 250 \
 --input_w 250 \
 --optimizer SGD \
---lr 1e-2 \
+--lr 5e-3 \
 --weight_decay 5e-4 \
 --momentum 0.9 \
 --scheduler  ReduceLROnPlateau \

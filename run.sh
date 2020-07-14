@@ -6,13 +6,13 @@ python train.py \
 --arch FCN32s \
 --deep_supervision False \
 "--gpu id" 0 \
---data_dir . \
---dataset VOC2011 \
+--data_dir Datasets \
+--dataset vocaug \
 --ratio 1 \
 --input_channels 3 \
---num_classes 21 \
---input_h 256 \
---input_w 256 \
+--base_size 300 \
+--crop_size 256 \
+--scale True \
 --optimizer SGD \
 --lr 1e-2 \
 --weight_decay 5e-4 \
