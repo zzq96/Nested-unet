@@ -399,6 +399,7 @@ def main():
         #writer.add_scalar("mIoU/train", train_log['iou'], epoch)
         #writer.add_scalar("mIoU/val", val_log['iou'], epoch)
         writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
+        writer.add_scalar('0_Loss/LR', optimizer.param_groups[0]['lr'])
         writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
         writer.add_scalar("1_mIoU/best_iou", best_iou, epoch)
 

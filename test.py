@@ -1,13 +1,19 @@
-from torch.utils.tensorboard import SummaryWriter  
-import numpy as np  
-from torchvision import transforms
-import matplotlib.pyplot as plt
-from torchvision.transforms import functional as F
-from PIL import Image
+import torch
+import torch.nn as nn
+import torchvision.models as models
 
-img = Image.open("test_imgs/2007_000033.jpg")#RGB模式
-target = Image.open("test_imgs/2007_000033.png")#P模式8位调色板模式, 像素值已经是对应类别的编号了
-img = F.hflip(img)
-target = F.hflip(target)
-img.save("1.jpg")
-target.save("2.png")
+vgg16 = models.resnet152(pretrained=True)
+
+#打印出预训练模型的参数
+print('vgg16:\n', vgg16) 
+# print('vgg16:\n', list(vgg16.children())) 
+# print('vgg16:\n', list(vgg16.modules())) 
+
+for name, parm in vgg16.named_parameters():
+    print(name)
+# print('modified_features:\n', list(vgg16.parameters()))#打印修改后的模型参数
+# modified_features = nn.Sequential(*list(vgg16.features.children())[:-1])
+# print('modified_features:\n', list(vgg16.features.children()) )#打印修改后的模型参数
+# modified_features = nn.Sequential(*list(vgg16.features.modules())[:-1])
+# # to relu5_3
+# print('modified_features:\n', list(vgg16.features.modules()))#打印修改后的模型参数

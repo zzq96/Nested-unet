@@ -4,9 +4,9 @@ python train.py \
 --epochs 500 \
 --batch_size 16 \
 --arch FCN8s \
---fuse_attention True \
---checkpoint_PATH exps/FCN8s_vocaug/200714_163851_SGD_lr_1e-03_wd_0e+00_fa_True/model.pth \
---only_read_model True \
+--fuse_attention False \
+--checkpoint_PATH exps/FCN8s_vocaug/200714_122603_SGD_lr_1e-03_wd_0e+00/model.pth \
+--only_read_model False \
 "--gpu id" 0 \
 --data_dir Datasets \
 --dataset vocaug \
