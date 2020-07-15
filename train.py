@@ -43,6 +43,7 @@ def parse_args():
                         ' (default: Unet)')
     parser.add_argument('--fuse_attention', default=False, type=str2bool)
     parser.add_argument('--checkpoint_PATH', default=None)
+    parser.add_argument('--only_read_model', default=False, type=str2bool)
     parser.add_argument('--input_channels', default=3, type=int,
                          help='input channels')
     parser.add_argument('--num_classes', default=21, type=int,
@@ -299,8 +300,6 @@ def main():
     model = archs.__dict__[config['arch']](num_classes=num_classes,
     input_channels=config['input_channels'], fuse_attention=config['fuse_attention'])
     model = model.to(device)
-    if config['checkpoint_PATH'] is not None:
-        _, model, _, _, _ = load_checkpoint(model, config['checkpoint_PATH'])
     print("training on", device)
 
     params = filter(lambda  p: p.requires_grad, model.parameters())
@@ -344,21 +343,31 @@ def main():
 
     X, label = next(iter(train_iter))
     writer.add_graph(model, X.to(device))
-    #在训练开始前看看输出是什么
-    epoch = -1
-    predict(model, exp_dir, epoch, config, device, writer)
-    val_log = validate(config, val_iter, model, criterion, device)
-    writer.add_scalars('0_Loss', {"train":val_log['loss'], "val":val_log['loss']}, epoch)
-    writer.add_scalars('1_mIoU', {"train":val_log['iou'], "val":val_log['iou']}, epoch)
-    writer.add_scalar("1_mIoU/best_iou", val_log['iou'], epoch)
+    
 
-    writer.add_scalars('2_Acc_cls', {"train":val_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
-    writer.add_scalars('3_Acc', {"train":val_log['acc'], "val":val_log['acc']}, epoch)
+    best_iou = 0
+    epoch_begin = 0
+
+    if config['checkpoint_PATH'] is None:
+        #在训练开始前看看输出是什么
+        epoch = -1
+        predict(model, exp_dir, epoch, config, device, writer)
+        val_log = validate(config, val_iter, model, criterion, device)
+        writer.add_scalars('0_Loss', {"train":val_log['loss'], "val":val_log['loss']}, epoch)
+        writer.add_scalars('1_mIoU', {"train":val_log['iou'], "val":val_log['iou']}, epoch)
+        writer.add_scalar("1_mIoU/best_iou", val_log['iou'], epoch)
+
+        writer.add_scalars('2_Acc_cls', {"train":val_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+        writer.add_scalars('3_Acc', {"train":val_log['acc'], "val":val_log['acc']}, epoch)
+    else:
+        if config['only_read_model']:
+            model, _, _, _, _ = load_checkpoint(model, config['checkpoint_PATH'])
+        else:
+            model, epoch_begin, best_iou, optimizer, scheduler = load_checkpoint(model, config['checkpoint_PATH'], epoch_begin,  best_iou, optimizer, scheduler)
 
 
     #下面正式开始训练
-    best_iou = 0
-    for epoch in range(config['epochs']):
+    for epoch in range(epoch_begin, config['epochs']):
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
         start_time = time.time()
         # train for one epoch

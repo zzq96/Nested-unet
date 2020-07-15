@@ -23,15 +23,18 @@ def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, opti
     if epoch is not None:
         epoch = model_CKPT['epoch']
     model.load_state_dict(model_CKPT['state_dict'])
-    print('loading checkpoint!')
+    print('loading checkpoint: state_dict!')
     if epoch is not None:
         best_iou = model_CKPT['best_iou']
+        print('loading checkpoint: best_iou!')
     if epoch is not None:
         optimizer.load_state_dict(model_CKPT['optimizer'])
+        print('loading checkpoint: optimizer!')
     if epoch is not None:
         scheduler.load_state_dict(model_CKPT['scheduler'])
+        print('loading checkpoint: scheduler!')
 
-    return epoch, model, best_iou, optimizer, scheduler
+    return model, epoch, best_iou, optimizer, scheduler
 
 class VOCSegmentation(VisionDataset):
     """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Segmentation Dataset.
