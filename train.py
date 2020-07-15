@@ -20,6 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 from encoding.datasets import get_segmentation_dataset
 from torchvision import transforms
 from torch.utils import data
+from encoding.utils.lr_scheduler import LR_Scheduler
 
 ARCH_NAMES = archs.__all__
 def parse_args():
@@ -92,7 +93,7 @@ def parse_args():
 
     # scheduler
     parser.add_argument('--scheduler', default='ConstantLR',
-                        choices=['CosineAnnealingLR', 'ReduceLROnPlateau', 'MultiStepLR', 'StepLR', 'ConstantLR'])
+                        choices=['CosineAnnealingLR', 'ReduceLROnPlateau', 'MultiStepLR', 'StepLR', 'ConstantLR', 'Poly'])
     parser.add_argument('--min_lr', default=1e-5, type=float,
                         help='minimum learning rate')
     #parser.add_argument('--factor', default=0.1, type=float)
@@ -109,7 +110,7 @@ def parse_args():
 
     return config
 
-def train(config, train_iter, model, criterion, optimizer,device):
+def train(config, train_iter, model, criterion, optimizer, scheduler,best_iou, epoch,  device):
     avg_meters = {'loss':AverageMeter(),
     'iou':AverageMeter(), 
     'acc':AverageMeter(), 
@@ -119,7 +120,8 @@ def train(config, train_iter, model, criterion, optimizer,device):
     model.train()
     
     pbar = tqdm(total=len(train_iter))
-    for X, labels in train_iter:
+    for i, (X, labels) in enumerate(train_iter):
+        scheduler(optimizer, i, epoch, best_iou)
         X = X.to(device)
         labels = labels.to(device)
         scores = model(X)
@@ -296,9 +298,10 @@ def main():
     accumulation_steps = 1
 
     #create model
+    model_kwargs = {'fuse_attention':config['fuse_attention']}
     print("=> creating model %s" % config['arch'])
     model = archs.__dict__[config['arch']](num_classes=num_classes,
-    input_channels=config['input_channels'], fuse_attention=config['fuse_attention'])
+    input_channels=config['input_channels'], **model_kwargs)
     model = model.to(device)
     print("training on", device)
 
@@ -321,20 +324,23 @@ def main():
     #loss函数
     criterion = nn.CrossEntropyLoss()
     #学习率策略
-    if config['scheduler'] == 'CosineAnnealingLR':
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=config['epochs'], eta_min=config['min_lr'])
-    elif config['scheduler'] == 'ReduceLROnPlateau':
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=config['lr_gamma'], patience=config['patience'],
-                                                   verbose=True, min_lr=config['min_lr'])
-    elif config['scheduler'] == 'MultiStepLR':
-        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[int(e) for e in config['milestones'].split(',')], gamma=config['lr_gamma'])
-    elif config['scheduler'] == 'StepLR':
-        scheduler = lr_scheduler.StepLR(optimizer, step_size=config['step_size'], gamma=config['lr_gamma'])
-    elif config['scheduler'] == 'ConstantLR':
-        scheduler = None
-    else:
-        raise NotImplementedError
+    
+    scheduler = LR_Scheduler(config['scheduler'], base_lr = config['lr'], num_epochs=config['epochs'], \
+        iters_per_epoch=len(train_iter))
+    # if config['scheduler'] == 'CosineAnnealingLR':
+    #     scheduler = lr_scheduler.CosineAnnealingLR(
+    #         optimizer, T_max=config['epochs'], eta_min=config['min_lr'])
+    # elif config['scheduler'] == 'ReduceLROnPlateau':
+    #     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=config['lr_gamma'], patience=config['patience'],
+    #                                                verbose=True, min_lr=config['min_lr'])
+    # elif config['scheduler'] == 'MultiStepLR':
+    #     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[int(e) for e in config['milestones'].split(',')], gamma=config['lr_gamma'])
+    # elif config['scheduler'] == 'StepLR':
+    #     scheduler = lr_scheduler.StepLR(optimizer, step_size=config['step_size'], gamma=config['lr_gamma'])
+    # elif config['scheduler'] == 'ConstantLR':
+    #     scheduler = None
+    # else:
+    #     raise NotImplementedError
 
     #创建实验结果保存目录
     writer = SummaryWriter(exp_dir)
@@ -371,15 +377,15 @@ def main():
         print('Epoch [%d/%d]' % (epoch, config['epochs']))
         start_time = time.time()
         # train for one epoch
-        train_log = train(config, train_iter, model, criterion, optimizer,device)
+        train_log = train(config, train_iter, model, criterion, optimizer, scheduler,best_iou,epoch, device)
         val_log = validate(config, val_iter, model, criterion, device)
 
-        if config['scheduler'] == 'ReduceLROnPlateau':
-            scheduler.step(val_log['loss'])
-        elif config['scheduler'] == 'ConstantLR':
-            pass
-        else:
-            scheduler.step()
+        # if config['scheduler'] == 'ReduceLROnPlateau':
+            # scheduler.step(val_log['loss'])
+        # elif config['scheduler'] == 'ConstantLR':
+            # pass
+        # else:
+            # scheduler.step()
 
 
         predict(model, exp_dir, epoch, config, device, writer)
@@ -390,8 +396,10 @@ def main():
 
         if val_log['iou'] >best_iou:
             best_iou = val_log['iou']
+            # torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
+            # 'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
             torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
-            'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
+            'optimizer':optimizer.state_dict()}, os.path.join(exp_dir,'model.pth'))
             print("=> saved best model")
 
         # writer.add_scalar("Loss/train", train_log['loss'], epoch)
@@ -399,7 +407,7 @@ def main():
         #writer.add_scalar("mIoU/train", train_log['iou'], epoch)
         #writer.add_scalar("mIoU/val", val_log['iou'], epoch)
         writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
-        writer.add_scalar('0_Loss/LR', optimizer.param_groups[0]['lr'])
+        writer.add_scalar('0_Loss/LR', optimizer.param_groups[0]['lr'], epoch)
         writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
         writer.add_scalar("1_mIoU/best_iou", best_iou, epoch)
 

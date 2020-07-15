@@ -48,13 +48,13 @@ class LR_Scheduler(object):
         # warm up lr schedule
         if self.warmup_iters > 0 and T < self.warmup_iters:
             lr = self.base_lr * 1.0 * T / self.warmup_iters
-        elif self.mode == 'cos':
+        elif self.mode == 'CosineAnnealingLR':
             T = T - self.warmup_iters
             lr = 0.5 * self.base_lr * (1 + math.cos(1.0 * T / self.total_iters * math.pi))
-        elif self.mode == 'poly':
+        elif self.mode == 'Poly':
             T = T - self.warmup_iters
             lr = self.base_lr * pow((1 - 1.0 * T / self.total_iters), 0.9)
-        elif self.mode == 'step':
+        elif self.mode == 'StepLR':
             lr = self.base_lr * (0.1 ** (epoch // self.lr_step))
         else:
             raise NotImplemented

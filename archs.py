@@ -3,9 +3,9 @@ from torch import nn
 from utils import VOCSegmentation, load_data_VOCSegmentation
 from utils import get_upsampling_weight
 import torchvision.models as models
-from unet_utils import unetConv2, unetUp
 from encoding.nn.attention import Fuse_Attention
-__all__ = ["Unet", "FCN32s", "FCN8s", "NestedUnet"]
+from encoding.models import DeepLabV3Plus
+__all__ = ["Unet", "FCN32s", "FCN8s", "NestedUnet", "DeepLabV3Plus"]
 
 class VGGBlock(nn.Module):
     def __init__(self, in_channels, middle_channels, out_channels):
@@ -290,9 +290,11 @@ class FCN32s(nn.Module):
 
 class FCN8s(nn.Module):
 
-    def __init__(self, num_classes, input_channels, fuse_attention = False):
+    def __init__(self, num_classes, input_channels, **kwargs):
         super(FCN8s, self).__init__()
-        self.fuse_attention =  fuse_attention 
+        #TODO:kwargs
+        if kwargs['fuse_attention']:
+            self.fuse_attention =  fuse_attention 
         if self.fuse_attention:
             self.fuse_s16 = Fuse_Attention(deep_dim=21, shallow_dim=512)
             self.fuse_s8 = Fuse_Attention(deep_dim=21, shallow_dim=256)

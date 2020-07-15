@@ -30,7 +30,8 @@ class VOC2011Segmentation(BaseDataset):
         elif self.mode == 'val':
             _split_f = os.path.join(_splits_dir, 'val.txt')
         elif self.mode == 'test':
-            _split_f = os.path.join(_splits_dir, 'test.txt')
+            RuntimeError('there is no test in voc2011, please use voc2012.')
+            # _split_f = os.path.join(_splits_dir, 'test.txt')
         else:
             raise RuntimeError('Unknown dataset split.')
         self.images = []
