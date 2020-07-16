@@ -5,5 +5,7 @@ import torchvision.models as models
 import numpy as np
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '1, 0'
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+model = models.resnet101()
+model.to("cuda")
 print(torch.cuda.device_count())

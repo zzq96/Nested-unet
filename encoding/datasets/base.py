@@ -39,8 +39,12 @@ class BaseDataset(data.Dataset):
         raise NotImplemented
 
     @property
-    def num_class(self):
+    def num_classes(self):
         return self.NUM_CLASS
+
+    @property
+    def input_channels(self):
+        return self.INPUT_CHANNELS
 
     @property
     def pred_offset(self):

@@ -1,25 +1,25 @@
 #!/bin/bash
 source /home/zqzhou/disk/miniconda3/bin/activate learn
-python train.py \
---epochs 250 \
---batch_size 2 \
+python deeplabv3plus/train.py \
 --arch DeepLabV3Plus \
---fuse_attention True \
-"--gpu id" 1 \
+--test_imgs_dir test_imgs \
 --data_dir Datasets \
 --dataset vocaug \
---ratio 1 \
---input_channels 3 \
+--ratio 100 \
 --base_size  684 \
 --crop_size 513 \
 --scale True \
+--epochs 250 \
+--batch_size 8 \
 --optimizer SGD \
 --lr 7e-3 \
---weight_decay 0 \
 --momentum 0.9 \
+--weight_decay 0 \
 --scheduler  Poly \
---lr_gamma 0.5 \
---patience 5 \
 --min_lr 5e-6 \
---test_imgs_dir test_imgs \
+--patience 5 \
+--lr_gamma 0.5 \
+--cuda True \
+--gpu_id 0 \
 --random_seed 1337 \
+--fuse_attention False \

@@ -22,7 +22,6 @@ from torchvision import transforms
 from torch.utils import data
 from encoding.utils.lr_scheduler import LR_Scheduler
 
-ARCH_NAMES = archs.__all__
 def parse_args():
     parser = argparse.ArgumentParser()
 

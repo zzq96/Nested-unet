@@ -15,6 +15,7 @@ class VOCAugSegmentation(BaseDataset):
         'tv'
     ]
     NUM_CLASS = 21
+    INPUT_CHANNELS = 3
     TRAIN_BASE_DIR = 'VOCaug/'
     def __init__(self, root = 'Datasets', split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):

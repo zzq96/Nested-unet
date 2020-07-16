@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import torchvision
 from torch import nn
 import matplotlib
-import utils
 import time
 import PIL
 from PIL import Image

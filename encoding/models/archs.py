@@ -1,10 +1,10 @@
 import torch
 from torch import nn
-from utils import VOCSegmentation, load_data_VOCSegmentation
-from utils import get_upsampling_weight
+from ..utils.utils import VOCSegmentation, load_data_VOCSegmentation
+from ..utils.utils import get_upsampling_weight
 import torchvision.models as models
-from encoding.nn.attention import Fuse_Attention
-from encoding.models import DeepLabV3Plus
+from ..nn.attention import Fuse_Attention
+from .deeplabv3plus import DeepLabV3Plus
 __all__ = ["Unet", "FCN32s", "FCN8s", "NestedUnet", "DeepLabV3Plus"]
 
 class VGGBlock(nn.Module):

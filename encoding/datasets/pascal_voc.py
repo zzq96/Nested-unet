@@ -15,6 +15,8 @@ class VOC2011Segmentation(BaseDataset):
         'tv/monitor', 'ambigious'
     ]
     NUM_CLASS = 21
+    INPUT_CHANNELS = 3
+
     BASE_DIR = 'VOC2011'
     def __init__(self, root, split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):
@@ -90,6 +92,7 @@ class VOC2012Segmentation(BaseDataset):
         'tv/monitor', 'ambigious'
     ]
     NUM_CLASS = 21
+    INPUT_CHANNELS = 3
     BASE_DIR = 'VOC2012'
     def __init__(self, root, split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):

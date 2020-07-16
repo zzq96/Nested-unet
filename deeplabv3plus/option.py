@@ -7,20 +7,17 @@
 import os
 import argparse
 import torch
+from encoding.utils.utils import str2bool
+import time, sys
 
 class Options():
     def __init__(self):
-        parser = argparse.ArgumentParser(description='PyTorch \
-            Segmentation')
+        parser = argparse.ArgumentParser(description='PyTorch Segmentation')
 
         parser.add_argument('--exp_name', default=None,
                             help='model name: (default: arch+timestamp)')
         # model
-        parser.add_argument('--arch', '-a', metavar='ARCH', default='Unet',
-                            choices=ARCH_NAMES,
-                            help='model architecture: ' +
-                            ' | '.join(ARCH_NAMES) +
-                            ' (default: Unet)')
+        parser.add_argument('--arch', '-a', type=str)
 
         #dataset
         parser.add_argument('--test_imgs_dir', default='.',
@@ -35,8 +32,8 @@ class Options():
                             help='image base_size')
         parser.add_argument('--crop_size', default=224, type=int,
                             help='image crop size')
-        parser.add_argument('--use_scale', default=True, type=str2bool)
-        parser.add_argument('--num_workers', default=4, type=int)
+        parser.add_argument('--scale', default=True, type=str2bool)
+        parser.add_argument('--num_workers', default=16, type=int)
 
         # training hyper params
         parser.add_argument('--epochs', default=100, type=int, metavar='N',
@@ -62,7 +59,7 @@ class Options():
                             help='nesterov')
         
         # lr scheduler
-        parser.add_argument('--lr_scheduler', default='Poly',
+        parser.add_argument('--scheduler', default='Poly',
                             choices=['ReduceLROnPlateau', 'StepLR', 'ConstantLR', 'Poly'])
         parser.add_argument('--min_lr', default=1e-6, type=float,
                             help='minimum learning rate')
@@ -77,7 +74,7 @@ class Options():
         
         # cuda, seed and logging
         parser.add_argument('--cuda', default=False, type=str2bool)
-        parser.add_argument('--gpu id', default=None, type=str)
+        parser.add_argument('--gpu_id', default=None, type=str)
         parser.add_argument('--random_seed', default=1337, type=int)
         parser.add_argument('--log_root', type=str, default=None)
 
@@ -116,6 +113,20 @@ class Options():
                 'cityscapes': 300,
             }
             args.epochs = epoches[args.dataset.lower()]
+
+        if args.exp_name is None:
+            args.exp_name = '%s_%s' % (args.arch, args.dataset)
+        cur_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())[2:]
+        #TODO:cur_time想想取什么目录名
+        args.exp_dir = os.path.join(sys.path[0], 'exps',args.exp_name, cur_time + "_" + \
+            args.optimizer + "_lr_" + '{:0.0e}_'.format(args.lr)+"wd_"+
+            '{:0.0e}'.format(args.weight_decay) + '_fa_' + str(args.fuse_attention))
+        print('exp_dir:', args.exp_dir)
+        print(args)
+        # print('-' * 20)
+        # for key in config:
+        #     print('%s:%s' %(key, args.key))
+        # print('-' * 20)
         # if args.batch_size is None:
         #     args.batch_size = 4 * torch.cuda.device_count()
         # if args.test_batch_size is None:

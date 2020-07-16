@@ -112,7 +112,7 @@ class Decoder(nn.Module):
         if fuse_attention:
             print("trainning with fuse_attention!")
             self.fuse_attention = fuse_attention
-            self.fuse  = Fuse_Attention(deep_dim=256, shallow_dim=48,reduce_rate=4)
+            self.fuse  = Fuse_Attention(deep_dim=256, shallow_dim=48,channel_reduce_rate=4)
             self.conv2 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         else:
             self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1, bias=False)
