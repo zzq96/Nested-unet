@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 from .backbone import *
+from ..nn.attention import Fuse_Attention
 # import torchvision
 
 import sys
@@ -101,20 +102,27 @@ class Encoder(nn.Module):
                 m.bias.data.zero_()
 
 class Decoder(nn.Module):
-    def __init__(self, class_num, bn_momentum=0.1):
+    def __init__(self, class_num, bn_momentum=0.1, fuse_attention=False, **kwargs):
         super(Decoder, self).__init__()
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(48, momentum=bn_momentum)
         self.relu = nn.ReLU()
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
-        self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1, bias=False)
+        if fuse_attention:
+            print("trainning with fuse_attention!")
+            self.fuse_attention = fuse_attention
+            self.fuse  = Fuse_Attention(deep_dim=256, shallow_dim=48,reduce_rate=4)
+            self.conv2 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
+        else:
+            self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout2 = nn.Dropout(0.5)
         self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         self.bn3 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout3 = nn.Dropout(0.1)
         self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
+
 
         self._init_weight()
 
@@ -123,7 +131,10 @@ class Decoder(nn.Module):
         low_level_feature = self.bn1(low_level_feature)
         low_level_feature = self.relu(low_level_feature)
         x_4 = F.interpolate(x, size=low_level_feature.size()[2:4], mode='bilinear' ,align_corners=True)
-        x_4_cat = torch.cat((x_4, low_level_feature), dim=1)
+        if self.fuse_attention:
+            x_4_cat = self.fuse(x_4, low_level_feature)
+        else:
+            x_4_cat = torch.cat((x_4, low_level_feature), dim=1)
         x_4_cat = self.conv2(x_4_cat)
         x_4_cat = self.bn2(x_4_cat)
         x_4_cat = self.relu(x_4_cat)
@@ -149,7 +160,7 @@ class DeepLabV3Plus(nn.Module):
         super(DeepLabV3Plus, self).__init__()
         self.Resnet101 = resnet101(bn_momentum, pretrained, output_stride=output_stride)
         self.encoder = Encoder(bn_momentum, output_stride)
-        self.decoder = Decoder(num_classes, bn_momentum)
+        self.decoder = Decoder(num_classes, bn_momentum, **kwargs)
         #TODO: 每次epoch训练不是都会model.train（）吗
         if freeze_bn:
             self.freeze_bn()

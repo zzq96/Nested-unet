@@ -4,16 +4,18 @@ from torch.nn import functional as F
 
 class Fuse_Attention(nn.Module):
     
-    def __init__(self, deep_dim, shallow_dim):
+    def __init__(self, deep_dim, shallow_dim, channel_reduce_rate=4, attention_scope = 1):
         super(Fuse_Attention, self).__init__()
-        assert shallow_dim >= 8
+        assert shallow_dim >= channel_reduce_rate
+        self.attention_scope = attention_scope
 
-        self.query_conv = nn.Conv2d(in_channels=shallow_dim, out_channels=shallow_dim//4, kernel_size=1)
-        self.key_conv = nn.Conv2d(in_channels=shallow_dim, out_channels=shallow_dim//4, kernel_size=1)
+        self.query_conv = nn.Conv2d(in_channels=shallow_dim, out_channels=shallow_dim//channel_reduce_rate, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=shallow_dim, out_channels=shallow_dim//channel_reduce_rate, kernel_size=1)
         #self.value_conv = Conv2d(in_channels=deep_dim, out_channels=in_dim, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
         self.softmax = nn.Softmax(dim=-1)
+
     def forward(self, deep, shallow):
         """
             inputs :
@@ -26,6 +28,7 @@ class Fuse_Attention(nn.Module):
 
         m_batchsize, shallow_C, height, width = shallow.size()
         deep_C = deep.size()[1]
+
         proj_query = self.query_conv(shallow).view(m_batchsize, -1, width*height).permute(0, 2, 1)
         proj_key = self.key_conv(shallow).view(m_batchsize, -1, width*height)
         energy = torch.bmm(proj_query, proj_key)

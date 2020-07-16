@@ -2,9 +2,10 @@
 source /home/zqzhou/disk/miniconda3/bin/activate learn
 python train.py \
 --epochs 250 \
---batch_size 8 \
+--batch_size 2 \
 --arch DeepLabV3Plus \
-"--gpu id" 0 \
+--fuse_attention True \
+"--gpu id" 1 \
 --data_dir Datasets \
 --dataset vocaug \
 --ratio 1 \
