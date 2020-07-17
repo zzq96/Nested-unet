@@ -2,40 +2,37 @@ import sys,os
 sys.path.append(os.path.dirname(__file__) + os.sep + '../')
 import torch
 import numpy as np
-import argparse
 from torch import nn
 from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 from encoding.models import archs
 from encoding.utils.utils import load_checkpoint,  load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat, str2bool
-from torch.optim import lr_scheduler
 from encoding.utils.loss import *
-import sys
+from encoding.models import get_segmentation_model
+import encoding.utils as utils
 import time
-import os
 from tqdm import tqdm
-import yaml
-import pandas as pd
-import cv2
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from encoding.datasets import get_segmentation_dataset
 from torchvision import transforms
 from torch.utils import data
 from encoding.utils.lr_scheduler import LR_Scheduler
-
 from option import Options
+
 ARCH_NAMES = archs.__all__
 
-class Trainer():
+class Trainer(object):
     def __init__(self, args):
         self.args = args
+        self.logger = utils.create_logger(self.args.exp_dir, "log")
+        self.logger.info(vars(self.args))
 
         if self.args.cuda:
             device = torch.device("cuda")
-            os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu_id #必须要放在所有用到cuda的代码前，下面的cuda.manual_seed也是
-            print("use gpu:"+ self.args.gpu_id)
+            self.logger.info("training on gpu:" + self.args.gpu_id)
         else:
+            self.logger.info("training on cpu")
             device = torch.device("cpu")
         self.device = device
 
@@ -49,12 +46,14 @@ class Trainer():
         cudnn.benchmark = True
 
         #读取数据集，现在只有VOC
+        self.logger.info('training on dataset '+ self.args.dataset)
+
         input_transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize([.485, .456, .406], [.229, .224, .225])])
 
         data_kwargs = {'transform': input_transform, 'root':self.args.data_dir, 'base_size': self.args.base_size,
-                    'crop_size': self.args.crop_size, 'logger': None, 'scale': self.args.scale}
+                    'crop_size': self.args.crop_size, 'logger': self.logger, 'scale': self.args.scale}
 
         trainset = get_segmentation_dataset(self.args.dataset, split='train', mode='train',
                                             **data_kwargs)
@@ -71,16 +70,17 @@ class Trainer():
         self.input_channels = trainset.input_channels
 
         #create model
-        model_kwargs = {'fuse_attention':self.args.fuse_attention}
+        kwargs = {'fuse_attention':self.args.fuse_attention}
+        self.model = get_segmentation_model(args.arch, dataset=args.dataset,backbone=args.backbone)
         print("=> creating model %s" % self.args.arch)
-        model = archs.__dict__[self.args.arch](num_classes=self.num_classes,
-        input_channels=self.input_channels, **model_kwargs)
-        print(os.environ["CUDA_VISIBLE_DEVICES"], "afas")
-        model = model.to(device)
-        print("training on", device)
+        # self.model = archs.__dict__[self.args.arch](num_classes=self.num_classes,
+        # input_channels=self.input_channels, **model_kwargs)
+        self.model = self.model.to(device)
+
+        self.logger.info(self.model)
 
         self.optimizer = None
-        params = filter(lambda  p: p.requires_grad, model.parameters())
+        params = filter(lambda  p: p.requires_grad, self.model.parameters())
         if self.args.optimizer == "Adam":
             self.optimizer = torch.optim.Adam(
                 params, lr=self.args.lr, weight_decay=self.args.weight_decay
@@ -91,29 +91,31 @@ class Trainer():
             )
         else:
             raise NotImplementedError
+
         #loss函数
         self.criterion = nn.CrossEntropyLoss()
 
         #学习率策略
         self.scheduler = LR_Scheduler(self.args.scheduler, base_lr = self.args.lr, num_epochs=self.args.epochs, \
-            iters_per_epoch=len(train_iter))
-        self.best_iou = 0.0
+            iters_per_epoch=len(self.train_iter))
+
 
         #创建实验结果保存目录
-        self.writer = SummaryWriter(exp_dir)
-        with open(os.path.join(exp_dir,'config.yml'), 'w') as f:
-            yaml.dump(config, f)
+        self.writer = SummaryWriter(args.exp_dir)
+        # with open(os.path.join(args.exp_dir,'config.yml'), 'w') as f:
+        #     yaml.dump(config, f)
 
-        X, label = next(iter(train_iter))
-        self.writer.add_graph(model, X.to(device))
+        X, label = next(iter(self.train_iter))
+        self.writer.add_graph(self.model, X.to(device))
         
         self.epoch_begin = 0
+        self.best_iou = 0.0
 
         if self.args.checkpoint_PATH is None:
             #在训练开始前看看输出是什么
             epoch = -1
-            predict(model, exp_dir, epoch, config, device, writer)
-            val_log = validate(config, val_iter, model, criterion, device)
+            self.predict(epoch)
+            val_log = self.validate()
             self.writer.add_scalars('0_Loss', {"train":val_log['loss'], "val":val_log['loss']}, epoch)
             self.writer.add_scalars('1_mIoU', {"train":val_log['iou'], "val":val_log['iou']}, epoch)
             self.writer.add_scalar("1_mIoU/best_iou", val_log['iou'], epoch)
@@ -124,17 +126,17 @@ class Trainer():
             if self.args.only_read_model:
                 model, _, _, _, _ = load_checkpoint(model, self.args.checkpoint_PATH)
             else:
-                model, epoch_begin, best_iou, optimizer, scheduler = load_checkpoint(model, self.args.checkpoint_PATH, epoch_begin,  best_iou, optimizer, scheduler)
-        self.model = model
+                model, self.epoch_begin, self.best_iou, self.optimizer= load_checkpoint(model, self.args.checkpoint_PATH, epoch_begin,  best_iou, optimizer, scheduler)
 
     def training(self):
         #下面正式开始训练
-        for epoch in range(epoch_begin, self.args.epochs):
+        for epoch in range(self.epoch_begin, self.args.epochs):
             print('Epoch [%d/%d]' % (epoch, self.args.epochs))
             start_time = time.time()
             # train for one epoch
-            train_log = train(config, train_iter, model, criterion, optimizer, scheduler,best_iou,epoch, device)
-            val_log = validate(config, val_iter, model, criterion, device)
+            train_log = self.train_one_epoch(epoch)
+            val_log = self.validate()
+            end_time = time.time()
 
             # if self.args.scheduler == 'ReduceLROnPlateau':
                 # scheduler.step(val_log['loss)
@@ -144,31 +146,31 @@ class Trainer():
                 # scheduler.step()
 
 
-            predict(model, exp_dir, epoch, config, device, writer)
+            self.predict(epoch)
                     
             print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
                 % (train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
 
 
-            if val_log['iou'] >best_iou:
-                best_iou = val_log['iou']
+            if val_log['iou'] >self.best_iou:
+                self.best_iou = val_log['iou']
                 # torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
                 # 'optimizer':optimizer.state_dict(), 'scheduler':scheduler.state_dict()}, os.path.join(exp_dir,'model.pth'))
-                torch.save({'epoch':epoch, 'state_dict':model.state_dict(), 'best_iou':best_iou,
-                'optimizer':optimizer.state_dict()}, os.path.join(exp_dir,'model.pth'))
+                torch.save({'epoch':epoch, 'state_dict':self.model.state_dict(), 'best_iou':self.best_iou,
+                'optimizer':self.optimizer.state_dict()}, os.path.join(self.args.exp_dir,'model.pth'))
                 print("=> saved best model")
 
             # writer.add_scalar("Loss/train", train_log['loss'], epoch)
             # writer.add_scalar("Loss/val", val_log['loss'], epoch)
             #writer.add_scalar("mIoU/train", train_log['iou'], epoch)
             #writer.add_scalar("mIoU/val", val_log['iou'], epoch)
-            writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
-            writer.add_scalar('0_Loss/LR', optimizer.param_groups[0]['lr'], epoch)
-            writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
-            writer.add_scalar("1_mIoU/best_iou", best_iou, epoch)
+            self.writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
+            self.writer.add_scalar('0_Loss/LR', self.optimizer.param_groups[0]['lr'], epoch)
+            self.writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
+            self.writer.add_scalar("1_mIoU/best_iou", self.best_iou, epoch)
 
-            writer.add_scalars('2_Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
-            writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
+            self.writer.add_scalars('2_Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+            self.writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
             # writer.add_scalar("Acc/train", train_log['acc'], epoch)
             # writer.add_scalar("Acc/val", val_log['acc'], epoch)
             # writer.add_scalar("Acc_cls/train", train_log['acc_cls'], epoch)
@@ -182,20 +184,20 @@ class Trainer():
         'acc_cls':AverageMeter() 
         }
 
-        model.train()
+        self.model.train()
         
-        pbar = tqdm(total=len(train_iter))
-        for i, (X, labels) in enumerate(train_iter):
-            scheduler(optimizer, i, epoch, best_iou)
-            X = X.to(device)
-            labels = labels.to(device)
-            scores = model(X)
-            loss = criterion(scores, labels)
+        pbar = tqdm(total=len(self.train_iter))
+        for i, (X, labels) in enumerate(self.train_iter):
+            self.scheduler(self.optimizer, i, epoch, self.best_iou)
+            X = X.to(self.device)
+            labels = labels.to(self.device)
+            scores = self.model(X)
+            loss = self.criterion(scores, labels)
             acc, acc_cls, iou = iou_score(scores, labels)
 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             avg_meters['loss'].update(loss.item(), X.size(0))
             avg_meters['iou'].update(iou, X.size(0))
@@ -224,15 +226,15 @@ class Trainer():
         'acc_cls':AverageMeter() 
         }
 
-        model.eval()
+        self.model.eval()
         
         with torch.no_grad():
-            pbar = tqdm(total=len(val_iter))
-            for X, labels in val_iter:
-                X = X.to(device)
-                labels = labels.to(device)
-                scores = model(X)
-                loss = criterion(scores, labels)
+            pbar = tqdm(total=len(self.val_iter))
+            for X, labels in self.val_iter:
+                X = X.to(self.device)
+                labels = labels.to(self.device)
+                scores = self.model(X)
+                loss = self.criterion(scores, labels)
                 acc, acc_cls, iou = iou_score(scores, labels)
 
                 avg_meters['loss'].update(loss.item(), X.size(0))
@@ -255,10 +257,10 @@ class Trainer():
                 ('acc_cls', avg_meters['acc_cls'].avg)
             ])
 
-    def predict(self, model, save_dir, epoch, config, device, writer):
+    def predict(self, epoch):
 
         test_imgs_dir = self.args.test_imgs_dir
-        model.eval()
+        self.model.eval()
         imgs = []
         imgs_label = []
         imgs_predict = []
@@ -281,7 +283,7 @@ class Trainer():
                 img_tensor = torchvision.transforms.ToTensor()(img_PIL)
                 img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
 
-                score = model(img_tensor.resize(1, *img_tensor.shape).to(device)).squeeze().cpu()
+                score = self.model(img_tensor.reshape(1, *img_tensor.shape).to(self.device)).squeeze().cpu()
                 score = torch.softmax(score, dim=0)
                 pre = score.max(dim=0)
                 label_pred = pre[1].data.numpy().astype(np.uint8) 
@@ -298,15 +300,10 @@ class Trainer():
                 imgs_score_map.append(plt.imread("tmp/score_map.png")[:, :, :3])
 
         if epoch == -1:
-            writer.add_images("0_True/original_img", np.stack(imgs, 0), epoch, dataformats="NHWC")
-            writer.add_images("0_True/imgs_label", np.stack(imgs_label, 0), epoch, dataformats="NHWC")
-        writer.add_images("1_Predict/imgs_predict", np.stack(imgs_predict, 0), epoch, dataformats="NHWC")
-        writer.add_images("1_Predict/imgs_score_map", np.stack(imgs_score_map, 0), epoch, dataformats="NHWC")
-
-
-
-
-            
+            self.writer.add_images("0_True/original_img", np.stack(imgs, 0), epoch, dataformats="NHWC")
+            self.writer.add_images("0_True/imgs_label", np.stack(imgs_label, 0), epoch, dataformats="NHWC")
+        self.writer.add_images("1_Predict/imgs_predict", np.stack(imgs_predict, 0), epoch, dataformats="NHWC")
+        self.writer.add_images("1_Predict/imgs_score_map", np.stack(imgs_score_map, 0), epoch, dataformats="NHWC")
 
 
 
@@ -333,6 +330,8 @@ class Trainer():
 if __name__ == '__main__':
     args = Options().parse()
     trainer = Trainer(args)
+    trainer.logger.info({'Total Epochs:', str(args.epochs)})
+    trainer.training()
     # for epoch in range(0, args.epochs):
     #     trainer.training(epoch)
     #     trainer.valiation(epoch)

@@ -172,6 +172,15 @@ def resnet152(bn_momentum=0.1, pretrained=False, output_stride=16):
     model = ResNet(Bottleneck, [3, 8, 36, 3], bn_momentum, pretrained, output_stride, 'resnet152')
     return model
 
+def get_resnet(arch, **kwargs):
+    models = {
+        'resnet50': resnet50,
+        'resnet101': resnet101,
+        'resnet152': resnet152
+    }
+    return models[arch.lower()](**kwargs)
+    
+
 
 
 

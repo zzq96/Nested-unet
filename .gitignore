@@ -12,3 +12,4 @@ Help document.txt
 test.py
 tmp/*
 *.tgz
+.*

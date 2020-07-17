@@ -13,6 +13,8 @@ import torch.utils.data as data
 __all__ = ['BaseDataset', 'test_batchify_fn']
 
 class BaseDataset(data.Dataset):
+    SCALE_MIN = 0.75
+    SCALE_MAX = 2
     def __init__(self, root, split, mode=None, transform=None, 
                  target_transform=None, base_size=520, crop_size=480,
                  logger=None, scale=True):
@@ -27,13 +29,23 @@ class BaseDataset(data.Dataset):
         self.scale = scale
 
         if self.mode == 'train':
-            print('BaseDataset: base_size {}, crop_size {}'. \
+            self.logger.info('BaseDataset: base_size {}, crop_size {}'. \
                 format(base_size, crop_size))
 
         if not self.scale:
             if self.logger is not None:
                 self.logger.info('single scale training!!!')
+            else:
+                self.logger.info('multi scale (%2f~%2d) training!!!'%(self.SCALE_MIN, self.SCALE_MAX))
 
+
+
+    def print_info(self):
+        if self.logger is not None:
+            self.logger.info("the "+self.split +' has ' + str(len(self.images)) + ' images')
+            self.logger.info('num_classes:%d, input_channels:%d' % (self.num_classes, self.input_channels))
+        else:
+            print('logger is None!!')
 
     def __getitem__(self, index):
         raise NotImplemented
@@ -80,7 +92,7 @@ class BaseDataset(data.Dataset):
             mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
         crop_size = self.crop_size
         if self.scale:
-            short_size = random.randint(int(self.base_size*0.75), int(self.base_size*1.5))
+            short_size = random.randint(int(self.base_size*self.SCALE_MIN), int(self.base_size*self.SCALE_MAX))
         else:
             short_size = self.base_size
         w, h = img.size

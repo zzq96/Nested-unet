@@ -50,6 +50,8 @@ class VOC2011Segmentation(BaseDataset):
 
         if self.mode != 'test':
             assert (len(self.images) == len(self.masks))
+        
+        self.print_info()
 
     def __getitem__(self, index):
         img = Image.open(self.images[index]).convert('RGB')
@@ -77,8 +79,8 @@ class VOC2011Segmentation(BaseDataset):
 
     def _mask_transform(self, mask):
         target = np.array(mask).astype('int32')
-        target[target == 255] = -1
-        #target[target == 255] = 0
+        # target[target == 255] = -1
+        target[target == 255] = 0
         return torch.from_numpy(target).long()
 
     def __len__(self):

@@ -14,8 +14,18 @@ from .backbone import *
 from ..nn.attention import Fuse_Attention
 # import torchvision
 
-import sys
-sys.path.append(os.path.abspath('..'))
+def get_deeplabv3plus(dataset='vocaug', backbone='resnet101', **kwargs):
+    # infer number of classes
+    from ..datasets import datasets, VOC2011Segmentation, VOC2012Segmentation, VOCAugSegmentation, ADE20KSegmentation
+    model = DeepLabV3Plus(datasets[dataset.lower()].NUM_CLASS, datasets[dataset.lower()].INPUT_CHANNELS, backbone=backbone, **kwargs)
+    # if pretrained:
+    #     from .model_store import get_model_file
+    #     model.load_state_dict(torch.load(
+    #         get_model_file('fcn_%s_%s'%(backbone, acronyms[dataset]), root=root)),
+    #         strict= False)
+    return model
+
+
 
 def _AsppConv(in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, bn_momentum=0.1):
     asppconv = nn.Sequential(
@@ -104,14 +114,14 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, class_num, bn_momentum=0.1, fuse_attention=False, **kwargs):
         super(Decoder, self).__init__()
+        self.fuse_attention = fuse_attention
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(48, momentum=bn_momentum)
         self.relu = nn.ReLU()
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
-        if fuse_attention:
+        if self.fuse_attention:
             print("trainning with fuse_attention!")
-            self.fuse_attention = fuse_attention
             self.fuse  = Fuse_Attention(deep_dim=256, shallow_dim=48,channel_reduce_rate=4)
             self.conv2 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         else:
@@ -156,9 +166,9 @@ class Decoder(nn.Module):
                 m.bias.data.zero_()
 
 class DeepLabV3Plus(nn.Module):
-    def __init__(self, num_classes,input_channels=3, output_stride=16, pretrained=True, bn_momentum=0.1, freeze_bn=False, **kwargs):
+    def __init__(self, num_classes,input_channels=3, backbone='resnet101', output_stride=16, pretrained=True, bn_momentum=0.1, freeze_bn=False, **kwargs):
         super(DeepLabV3Plus, self).__init__()
-        self.Resnet101 = resnet101(bn_momentum, pretrained, output_stride=output_stride)
+        self.Resnet101 = get_resnet(arch = backbone, bn_momentum=bn_momentum, pretrained=pretrained, output_stride=output_stride)
         self.encoder = Encoder(bn_momentum, output_stride)
         self.decoder = Decoder(num_classes, bn_momentum, **kwargs)
         #TODO: 每次epoch训练不是都会model.train（）吗

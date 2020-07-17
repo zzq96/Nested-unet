@@ -14,10 +14,10 @@ class Options():
     def __init__(self):
         parser = argparse.ArgumentParser(description='PyTorch Segmentation')
 
-        parser.add_argument('--exp_name', default=None,
-                            help='model name: (default: arch+timestamp)')
+        parser.add_argument('--exp_dir', default=None)
         # model
         parser.add_argument('--arch', '-a', type=str)
+        parser.add_argument('--backbone', default='resnet50', type=str)
 
         #dataset
         parser.add_argument('--test_imgs_dir', default='.',
@@ -85,11 +85,6 @@ class Options():
         #custom
         parser.add_argument('--fuse_attention', default=False, type=str2bool)
 
-        # parser.add_argument('--input_channels', default=3, type=int,
-        #                     help='input channels')
-        # parser.add_argument('--num_classes', default=21, type=int,
-        #                     help='number of classes')
-        
         
         # parser.add_argument('--img_ext', default='.png',
                             # help='image file extension')
@@ -101,6 +96,8 @@ class Options():
 
     def parse(self):
         args = self.parser.parse_args()
+        if args.cuda:
+            os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id #必须要放在所有用到cuda的代码前，下面的cuda.manual_seed也是
         args.cuda = args.cuda and torch.cuda.is_available()
         # default settings for epochs, batch_size and lr
         if args.epochs is None:
@@ -114,14 +111,11 @@ class Options():
             }
             args.epochs = epoches[args.dataset.lower()]
 
-        if args.exp_name is None:
-            args.exp_name = '%s_%s' % (args.arch, args.dataset)
         cur_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())[2:]
-        #TODO:cur_time想想取什么目录名
-        args.exp_dir = os.path.join(sys.path[0], 'exps',args.exp_name, cur_time + "_" + \
-            args.optimizer + "_lr_" + '{:0.0e}_'.format(args.lr)+"wd_"+
-            '{:0.0e}'.format(args.weight_decay) + '_fa_' + str(args.fuse_attention))
-        print('exp_dir:', args.exp_dir)
+        if args.exp_dir is None:
+            args.exp_dir = os.path.join(sys.path[0], '.' + args.dataset, cur_time + "_" + \
+                args.optimizer + "_lr_" + '{:0.0e}_'.format(args.lr)+"wd_"+
+                '{:0.0e}'.format(args.weight_decay) + '_fa_' + str(args.fuse_attention))
         print(args)
         # print('-' * 20)
         # for key in config:

@@ -2,10 +2,11 @@
 source /home/zqzhou/disk/miniconda3/bin/activate learn
 python deeplabv3plus/train.py \
 --arch DeepLabV3Plus \
+--backbone resnet101 \
 --test_imgs_dir test_imgs \
 --data_dir Datasets \
---dataset vocaug \
---ratio 100 \
+--dataset voc2011 \
+--ratio 1 \
 --base_size  684 \
 --crop_size 513 \
 --scale True \
@@ -20,6 +21,6 @@ python deeplabv3plus/train.py \
 --patience 5 \
 --lr_gamma 0.5 \
 --cuda True \
---gpu_id 0 \
+--gpu_id 1 \
 --random_seed 1337 \
 --fuse_attention False \

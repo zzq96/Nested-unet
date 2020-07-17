@@ -215,7 +215,7 @@ def predict(model, save_dir, epoch, config, device, writer):
             img_tensor = torchvision.transforms.ToTensor()(img_PIL)
             img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
 
-            score = model(img_tensor.resize(1, *img_tensor.shape).to(device)).squeeze().cpu()
+            score = model(img_tensor.reshape(1, *img_tensor.shape).to(device)).squeeze().cpu()
             score = torch.softmax(score, dim=0)
             pre = score.max(dim=0)
             label_pred = pre[1].data.numpy().astype(np.uint8) 

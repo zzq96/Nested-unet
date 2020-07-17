@@ -17,7 +17,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, optimizer = None, scheduler = None):
+def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, optimizer = None):
 
     model_CKPT = torch.load(checkpoint_PATH)
     if epoch is not None:
@@ -30,11 +30,11 @@ def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, opti
     if epoch is not None:
         optimizer.load_state_dict(model_CKPT['optimizer'])
         print('loading checkpoint: optimizer!')
-    if epoch is not None:
-        scheduler.load_state_dict(model_CKPT['scheduler'])
-        print('loading checkpoint: scheduler!')
+    # if epoch is not None:
+    #     scheduler.load_state_dict(model_CKPT['scheduler'])
+    #     print('loading checkpoint: scheduler!')
 
-    return model, epoch, best_iou, optimizer, scheduler
+    return model, epoch, best_iou, optimizer
 
 class VOCSegmentation(VisionDataset):
     """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Segmentation Dataset.
