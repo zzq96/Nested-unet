@@ -134,8 +134,8 @@ class Trainer(object):
             self.writer.add_scalar('0_Loss/LR', self.optimizer.param_groups[0]['lr'], epoch)
             self.writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
             self.writer.add_scalar("1_mIoU/best_iou", self.best_iou, epoch)
-            self.writer.add_scalars('Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
-            self.writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
+            self.writer.add_scalars('2_Acc/acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+            self.writer.add_scalars('2_Acc/acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
 
     def training(self):
         #下面正式开始训练

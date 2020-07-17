@@ -165,22 +165,33 @@ class Decoder(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
+class DeepLabV3PlusHead(nn.Module):
+    def __init__(self, num_classes, output_stride):
+        super(DeepLabV3PlusHead, self).__init__()
+        self.encoder = Encoder(output_stride)
+        self.decoder = Decoder(num_classes)
+    
+    def forward(self, x, low_level_features):
+        x = self.encoder(x)
+        x = self.decoder(x, low_level_features)
+        return x
+
 class DeepLabV3Plus(nn.Module):
     def __init__(self, num_classes,input_channels=3, backbone='resnet101', output_stride=16, pretrained=True, bn_momentum=0.1, freeze_bn=False, **kwargs):
         super(DeepLabV3Plus, self).__init__()
-        self.Resnet101 = get_resnet(arch = backbone, bn_momentum=bn_momentum, pretrained=pretrained, output_stride=output_stride)
-        self.encoder = Encoder(bn_momentum, output_stride)
-        self.decoder = Decoder(num_classes, bn_momentum, **kwargs)
+        self.pretrained = get_resnet(arch = backbone, pretrained=pretrained, output_stride=output_stride)
+        self.head = DeepLabV3PlusHead(num_classes, output_stride)
         #TODO: 每次epoch训练不是都会model.train（）吗
         if freeze_bn:
             self.freeze_bn()
             print("freeze bacth normalization successfully!")
 
     def forward(self, input):
-        x, low_level_features = self.Resnet101(input)
+        c1, _, _, c4 = self.pretrained(input)
 
-        x = self.encoder(x)
-        predict = self.decoder(x, low_level_features)
+        predict = self.head(c4, c1)
+        # x = self.encoder(x)
+        # predict = self.decoder(x, low_level_features)
         output= F.interpolate(predict, size=input.size()[2:4], mode='bilinear', align_corners=True)
         return output
 
