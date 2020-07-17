@@ -18,5 +18,4 @@ from .files import *
 from .misc import *
 from .dist_helper import *
 from .utils import *
-from .loss import *
 from .log import *
