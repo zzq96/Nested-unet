@@ -16,6 +16,8 @@ class VOCAugSegmentation(BaseDataset):
     ]
     NUM_CLASS = 21
     INPUT_CHANNELS = 3
+    #白边，需要忽略
+    IGNORE_INDEX =255
     TRAIN_BASE_DIR = 'VOCaug/'
     def __init__(self, root = 'Datasets', split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):
@@ -72,8 +74,8 @@ class VOCAugSegmentation(BaseDataset):
 
     def _mask_transform(self, mask):
         target = np.array(mask).astype('int32')
-        #target[target == 255] = -1
-        target[target == 255] = 0
+        # #target[target == 255] = -1
+        # target[target == 255] = 0
         return torch.from_numpy(target).long()
 
     def __len__(self):

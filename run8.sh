@@ -7,7 +7,7 @@ python train.py \
 --fuse_attention False \
 --checkpoint_PATH exps/FCN8s_vocaug/200714_122603_SGD_lr_1e-03_wd_0e+00/model.pth \
 --only_read_model False \
-"--gpu id" 0 \
+"--gpu id" 1 \
 --data_dir Datasets \
 --dataset vocaug \
 --ratio 1 \

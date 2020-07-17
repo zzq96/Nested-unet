@@ -1,32 +1,36 @@
 import sys,os
 sys.path.append(os.path.dirname(__file__) + os.sep + '../')
-import torch
-import numpy as np
-from torch import nn
-from collections import OrderedDict
-import torch.backends.cudnn as cudnn
-from encoding.models import archs
-from encoding.utils.utils import load_checkpoint,  load_data_VOCSegmentation, init_weights, get_upsampling_weight, AverageMeter,MultiRandomCrop, PILImageConcat, str2bool
-from encoding.utils.loss import *
-from encoding.models import get_segmentation_model
-import encoding.utils as utils
 import time
+import numpy as np
+from PIL import Image
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from torch.utils.tensorboard import SummaryWriter
-from encoding.datasets import get_segmentation_dataset
-from torchvision import transforms
-from torch.utils import data
-from encoding.utils.lr_scheduler import LR_Scheduler
-from option import Options
+from collections import OrderedDict
 
-ARCH_NAMES = archs.__all__
+import torch
+from torch import nn
+from torch.utils import data
+from torchvision import transforms
+import torch.backends.cudnn as cudnn
+from torch.utils.tensorboard import SummaryWriter
+
+from option import Options
+import encoding.utils as utils
+from encoding.utils.metrics import *
+from encoding.models import get_segmentation_model
+from encoding.utils.lr_scheduler import LR_Scheduler
+from encoding.datasets import get_segmentation_dataset
+from encoding.utils.utils import load_checkpoint, AverageMeter, str2bool
+
+
+# ARCH_NAMES = archs.__all__
 
 class Trainer(object):
     def __init__(self, args):
         self.args = args
         self.logger = utils.create_logger(self.args.exp_dir, "log")
-        self.logger.info(vars(self.args))
+        for k, v in vars(self.args).items():
+            self.logger.info((k, v))
 
         if self.args.cuda:
             device = torch.device("cuda")
@@ -77,7 +81,7 @@ class Trainer(object):
         # input_channels=self.input_channels, **model_kwargs)
         self.model = self.model.to(device)
 
-        self.logger.info(self.model)
+        # self.logger.info(self.model)
 
         self.optimizer = None
         params = filter(lambda  p: p.requires_grad, self.model.parameters())
@@ -93,7 +97,7 @@ class Trainer(object):
             raise NotImplementedError
 
         #loss函数
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=trainset.IGNORE_INDEX)
 
         #学习率策略
         self.scheduler = LR_Scheduler(self.args.scheduler, base_lr = self.args.lr, num_epochs=self.args.epochs, \
@@ -105,28 +109,33 @@ class Trainer(object):
         # with open(os.path.join(args.exp_dir,'config.yml'), 'w') as f:
         #     yaml.dump(config, f)
 
+        #用tensoboard看一下模型结构
         X, label = next(iter(self.train_iter))
         self.writer.add_graph(self.model, X.to(device))
         
         self.epoch_begin = 0
         self.best_iou = 0.0
 
-        if self.args.checkpoint_PATH is None:
-            #在训练开始前看看输出是什么
-            epoch = -1
-            self.predict(epoch)
-            val_log = self.validate()
-            self.writer.add_scalars('0_Loss', {"train":val_log['loss'], "val":val_log['loss']}, epoch)
-            self.writer.add_scalars('1_mIoU', {"train":val_log['iou'], "val":val_log['iou']}, epoch)
-            self.writer.add_scalar("1_mIoU/best_iou", val_log['iou'], epoch)
+        #在训练开始前看看输出是什么
+        self.predict_testimgs_and_write_into_tensorboard(epoch = -1)
+        val_log = self.validate()
+        self.write_into_tensorboard(val_log, val_log, epoch=-1)
 
-            self.writer.add_scalars('2_Acc_cls', {"train":val_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
-            self.writer.add_scalars('3_Acc', {"train":val_log['acc'], "val":val_log['acc']}, epoch)
-        else:
+        #checkpoint_PATH
+        if self.args.checkpoint_PATH is not None:
             if self.args.only_read_model:
                 model, _, _, _, _ = load_checkpoint(model, self.args.checkpoint_PATH)
             else:
                 model, self.epoch_begin, self.best_iou, self.optimizer= load_checkpoint(model, self.args.checkpoint_PATH, epoch_begin,  best_iou, optimizer, scheduler)
+
+    def write_into_tensorboard(self, train_log, val_log, epoch):
+
+            self.writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
+            self.writer.add_scalar('0_Loss/LR', self.optimizer.param_groups[0]['lr'], epoch)
+            self.writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
+            self.writer.add_scalar("1_mIoU/best_iou", self.best_iou, epoch)
+            self.writer.add_scalars('Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
+            self.writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
 
     def training(self):
         #下面正式开始训练
@@ -138,19 +147,10 @@ class Trainer(object):
             val_log = self.validate()
             end_time = time.time()
 
-            # if self.args.scheduler == 'ReduceLROnPlateau':
-                # scheduler.step(val_log['loss)
-            # elif self.args.scheduler == 'ConstantLR':
-                # pass
-            # else:
-                # scheduler.step()
-
-
-            self.predict(epoch)
+            self.predict_testimgs_and_write_into_tensorboard(epoch)
                     
-            print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
-                % (train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
-
+            self.logger.info('epoch %d: lr %0.3e -  loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
+                % (self.optimizer.param_groups[0]['lr'], epoch, train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
 
             if val_log['iou'] >self.best_iou:
                 self.best_iou = val_log['iou']
@@ -160,21 +160,7 @@ class Trainer(object):
                 'optimizer':self.optimizer.state_dict()}, os.path.join(self.args.exp_dir,'model.pth'))
                 print("=> saved best model")
 
-            # writer.add_scalar("Loss/train", train_log['loss'], epoch)
-            # writer.add_scalar("Loss/val", val_log['loss'], epoch)
-            #writer.add_scalar("mIoU/train", train_log['iou'], epoch)
-            #writer.add_scalar("mIoU/val", val_log['iou'], epoch)
-            self.writer.add_scalars('0_Loss', {"train":train_log['loss'], "val":val_log['loss']}, epoch)
-            self.writer.add_scalar('0_Loss/LR', self.optimizer.param_groups[0]['lr'], epoch)
-            self.writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
-            self.writer.add_scalar("1_mIoU/best_iou", self.best_iou, epoch)
-
-            self.writer.add_scalars('2_Acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
-            self.writer.add_scalars('3_Acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
-            # writer.add_scalar("Acc/train", train_log['acc'], epoch)
-            # writer.add_scalar("Acc/val", val_log['acc'], epoch)
-            # writer.add_scalar("Acc_cls/train", train_log['acc_cls'], epoch)
-            # writer.add_scalar("Acc_cls/val", val_log['acc_cls'], epoch)
+            self.write_into_tensorboard(train_log, val_log, epoch)
             torch.cuda.empty_cache()
 
     def train_one_epoch(self, epoch):
@@ -257,7 +243,7 @@ class Trainer(object):
                 ('acc_cls', avg_meters['acc_cls'].avg)
             ])
 
-    def predict(self, epoch):
+    def predict_testimgs_and_write_into_tensorboard(self, epoch):
 
         test_imgs_dir = self.args.test_imgs_dir
         self.model.eval()
@@ -280,8 +266,8 @@ class Trainer(object):
                 img_PIL = img_PIL.resize((self.args.crop_size, self.args.crop_size), Image.NEAREST)
                 label_PIL = label_PIL.resize((self.args.crop_size, self.args.crop_size), Image.NEAREST)
 
-                img_tensor = torchvision.transforms.ToTensor()(img_PIL)
-                img_tensor= torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
+                img_tensor = transforms.ToTensor()(img_PIL)
+                img_tensor= transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(img_tensor)
 
                 score = self.model(img_tensor.reshape(1, *img_tensor.shape).to(self.device)).squeeze().cpu()
                 score = torch.softmax(score, dim=0)
@@ -292,47 +278,21 @@ class Trainer(object):
 
 
                 #label_pred.putpalette(label.getpalette())
-
                 imgs.append(np.array(img_PIL))
                 imgs_label.append(np.array(label_PIL.convert("RGB")))
                 imgs_predict.append(np.array(label_pred.convert("RGB")))
                 plt.imsave('tmp/score_map.png', score[0])
                 imgs_score_map.append(plt.imread("tmp/score_map.png")[:, :, :3])
 
+        #原始图片只需要写一次
         if epoch == -1:
             self.writer.add_images("0_True/original_img", np.stack(imgs, 0), epoch, dataformats="NHWC")
             self.writer.add_images("0_True/imgs_label", np.stack(imgs_label, 0), epoch, dataformats="NHWC")
         self.writer.add_images("1_Predict/imgs_predict", np.stack(imgs_predict, 0), epoch, dataformats="NHWC")
         self.writer.add_images("1_Predict/imgs_score_map", np.stack(imgs_score_map, 0), epoch, dataformats="NHWC")
 
-
-
-    # if self.args.scheduler == 'CosineAnnealingLR':
-    #     scheduler = lr_scheduler.CosineAnnealingLR(
-    #         optimizer, T_max=self.args.epochs, eta_min=self.args.min_lr)
-    # elif self.args.scheduler == 'ReduceLROnPlateau':
-    #     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=self.args.lr_gamma, patience=self.args.patience,
-    #                                                verbose=True, min_lr=self.args.min_lr)
-    # elif self.args.scheduler == 'MultiStepLR':
-    #     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[int(e) for e in self.args.milestones.split(',')], gamma=self.args.lr_gamma)
-    # elif self.args.scheduler == 'StepLR':
-    #     scheduler = lr_scheduler.StepLR(optimizer, step_size=self.args.step_size, gamma=self.args.lr_gamma)
-    # elif self.args.scheduler == 'ConstantLR':
-    #     scheduler = None
-    # else:
-    #     raise NotImplementedError
-
-
-
-
-
-
 if __name__ == '__main__':
     args = Options().parse()
     trainer = Trainer(args)
     trainer.logger.info({'Total Epochs:', str(args.epochs)})
     trainer.training()
-    # for epoch in range(0, args.epochs):
-    #     trainer.training(epoch)
-    #     trainer.valiation(epoch)
-        
