@@ -84,7 +84,7 @@ class AsppModule(nn.Module):
                 m.bias.data.zero_()
 
 class Encoder(nn.Module):
-    def __init__(self, bn_momentum=0.1, output_stride=16):
+    def __init__(self, output_stride=16, bn_momentum=0.1):
         super(Encoder, self).__init__()
         self.ASPP = AsppModule(bn_momentum=bn_momentum, output_stride=output_stride)
         self.relu = nn.ReLU()
@@ -112,7 +112,7 @@ class Encoder(nn.Module):
                 m.bias.data.zero_()
 
 class Decoder(nn.Module):
-    def __init__(self, class_num, bn_momentum=0.1, fuse_attention=False, **kwargs):
+    def __init__(self, num_classes, bn_momentum=0.1, fuse_attention=False, **kwargs):
         super(Decoder, self).__init__()
         self.fuse_attention = fuse_attention
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
@@ -131,7 +131,7 @@ class Decoder(nn.Module):
         self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         self.bn3 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout3 = nn.Dropout(0.1)
-        self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
+        self.conv4 = nn.Conv2d(256, num_classes, kernel_size=1)
 
 
         self._init_weight()
@@ -168,8 +168,8 @@ class Decoder(nn.Module):
 class DeepLabV3PlusHead(nn.Module):
     def __init__(self, num_classes, output_stride):
         super(DeepLabV3PlusHead, self).__init__()
-        self.encoder = Encoder(output_stride)
-        self.decoder = Decoder(num_classes)
+        self.encoder = Encoder(output_stride=output_stride)
+        self.decoder = Decoder(num_classes=num_classes)
     
     def forward(self, x, low_level_features):
         x = self.encoder(x)

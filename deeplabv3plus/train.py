@@ -99,6 +99,8 @@ class Trainer(object):
         #loss函数
         self.criterion = nn.CrossEntropyLoss(ignore_index=trainset.IGNORE_INDEX)
 
+        #语义分割评价指标
+        self.metric = SegmentationMetric(self.num_classes)
         #学习率策略
         self.scheduler = LR_Scheduler(self.args.scheduler, base_lr = self.args.lr, num_epochs=self.args.epochs, \
             iters_per_epoch=len(self.train_iter))
@@ -117,8 +119,7 @@ class Trainer(object):
         self.best_iou = 0.0
 
         #在训练开始前看看输出是什么
-        self.predict_testimgs_and_write_into_tensorboard(epoch = -1)
-        val_log = self.validate()
+        val_log = self.validate(epoch=-1, is_visualize_segmentation=True)
         self.write_into_tensorboard(val_log, val_log, epoch=-1)
 
         #checkpoint_PATH
@@ -134,23 +135,19 @@ class Trainer(object):
             self.writer.add_scalar('0_Loss/LR', self.optimizer.param_groups[0]['lr'], epoch)
             self.writer.add_scalars('1_mIoU', {"train":train_log['iou'], "val":val_log['iou']}, epoch)
             self.writer.add_scalar("1_mIoU/best_iou", self.best_iou, epoch)
-            self.writer.add_scalars('2_Acc/acc_cls', {"train":train_log['acc_cls'], "val":val_log['acc_cls']}, epoch)
             self.writer.add_scalars('2_Acc/acc', {"train":train_log['acc'], "val":val_log['acc']}, epoch)
 
     def training(self):
         #下面正式开始训练
         for epoch in range(self.epoch_begin, self.args.epochs):
             print('Epoch [%d/%d]' % (epoch, self.args.epochs))
-            start_time = time.time()
             # train for one epoch
             train_log = self.train_one_epoch(epoch)
-            val_log = self.validate()
-            end_time = time.time()
+            val_log = self.validate(epoch, is_visualize_segmentation=True)
 
-            self.predict_testimgs_and_write_into_tensorboard(epoch)
                     
             self.logger.info('epoch %d: lr %0.3e -  loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
-                % (self.optimizer.param_groups[0]['lr'], epoch, train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
+                % (epoch, self.optimizer.param_groups[0]['lr'], train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
 
             if val_log['iou'] >self.best_iou:
                 self.best_iou = val_log['iou']
@@ -164,14 +161,10 @@ class Trainer(object):
             torch.cuda.empty_cache()
 
     def train_one_epoch(self, epoch):
-        avg_meters = {'loss':AverageMeter(),
-        'iou':AverageMeter(), 
-        'acc':AverageMeter(), 
-        'acc_cls':AverageMeter() 
-        }
+        avg_meters = {'loss':AverageMeter()}
 
+        self.metric.reset()
         self.model.train()
-        
         pbar = tqdm(total=len(self.train_iter))
         for i, (X, labels) in enumerate(self.train_iter):
             self.scheduler(self.optimizer, i, epoch, self.best_iou)
@@ -179,41 +172,34 @@ class Trainer(object):
             labels = labels.to(self.device)
             scores = self.model(X)
             loss = self.criterion(scores, labels)
-            acc, acc_cls, iou = iou_score(scores, labels)
+            self.metric.update(labels, scores)
+            avg_meters['loss'].update(loss.item(), X.size(0))
 
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-            avg_meters['loss'].update(loss.item(), X.size(0))
-            avg_meters['iou'].update(iou, X.size(0))
-            avg_meters['acc'].update(acc, X.size(0))
-            avg_meters['acc_cls'].update(acc_cls, X.size(0))
-
             postfix = OrderedDict([
-                ('loss', avg_meters['loss'].avg),
-                ('iou', avg_meters['iou'].avg)
+                ('loss', avg_meters['loss'].avg)
             ])
             pbar.set_postfix(postfix)
             pbar.update(1)
         pbar.close()
 
+        pixAcc, mIoU = self.metric.get()
+
         return OrderedDict([
                 ('loss', avg_meters['loss'].avg),
-                ('iou', avg_meters['iou'].avg),
-                ('acc', avg_meters['acc'].avg),
-                ('acc_cls', avg_meters['acc_cls'].avg)
+                ('iou', mIoU),
+                ('acc', avg_meters['acc'].avg)
             ])
 
-    def validate(self):
-        avg_meters = {'loss':AverageMeter(),
-        'iou':AverageMeter(),
-        'acc':AverageMeter(), 
-        'acc_cls':AverageMeter() 
-        }
+    def validate(self, epoch, is_visualize_segmentation=True):
+        avg_meters = {'loss':AverageMeter() }
 
+        self.metric.reset()
         self.model.eval()
-        
+        visualizations  = []
         with torch.no_grad():
             pbar = tqdm(total=len(self.val_iter))
             for X, labels in self.val_iter:
@@ -221,29 +207,28 @@ class Trainer(object):
                 labels = labels.to(self.device)
                 scores = self.model(X)
                 loss = self.criterion(scores, labels)
-                acc, acc_cls, iou = iou_score(scores, labels)
+                self.metric.update(labels, scores)
 
                 avg_meters['loss'].update(loss.item(), X.size(0))
-                avg_meters['iou'].update(iou, X.size(0))
-                avg_meters['acc'].update(acc, X.size(0))
-                avg_meters['acc_cls'].update(acc_cls, X.size(0))
 
                 postfix = OrderedDict([
-                    ('loss', avg_meters['loss'].avg),
-                    ('iou', avg_meters['iou'].avg)
+                    ('loss', avg_meters['loss'].avg)
                 ])
                 pbar.set_postfix(postfix)
                 pbar.update(1)
             pbar.close()
+        self.visualize_segmentation(epoch)
 
+        pixAcc, mIoU = self.metric.get()
+
+        self.visualize_segmentation(epoch)
         return OrderedDict([
                 ('loss', avg_meters['loss'].avg),
-                ('iou', avg_meters['iou'].avg),
-                ('acc', avg_meters['acc'].avg),
-                ('acc_cls', avg_meters['acc_cls'].avg)
+                ('iou', mIoU),
+                ('acc', pixAcc)
             ])
 
-    def predict_testimgs_and_write_into_tensorboard(self, epoch):
+    def visualize_segmentation(self, epoch):
 
         test_imgs_dir = self.args.test_imgs_dir
         self.model.eval()

@@ -1,100 +1,134 @@
-import torch
-import matplotlib.pyplot as plt
-# from torchsummary import summary
-import torchvision
-from torch import nn
-import matplotlib
-import time
-import PIL
-from PIL import Image
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+## Created by: Hang Zhang
+## ECE Department, Rutgers University
+## Email: zhang.hang@rutgers.edu
+## Copyright (c) 2017
+##
+## This source code is licensed under the MIT-style license found in the
+## LICENSE file in the root directory of this source tree
+##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 import numpy as np
-import torchvision.models as models
-import os
+import torch
 
-def _fast_hist(label_true, label_pred, n_class):
-    """
-    Inputs:
-    - label_true: numpy, (W, )
-    = label_pred: numpy, (W, )
+__all__ = ['get_pixacc_miou', 'SegmentationMetric', 'batch_intersection_union', 'batch_pix_accuracy',
+           'pixel_accuracy', 'intersection_and_union']
 
-    Returns:
-    - hist: numpy, (n_class, n_class), hist[i, j] shows the number of the true label i to pred label j
-    """
-    mask = (label_true >= 0) & (label_true < n_class)
-    hist = np.bincount(
-        n_class * label_true[mask].astype(int) +
-        label_pred[mask], minlength=n_class ** 2).reshape(n_class, n_class)
-    return hist
 
-def label_accuracy_score(label_trues, label_preds, n_class):
-    """
-    Inputs:
-    - label_trues: list, (H, w), numpy
-    - label_preds: list, (H, w), numpy
-    - n_class: int
-    Returns accuracy score evaluation result.
-      - overall accuracy
-      - mean accuracy
-      - mean IU
-      - fwavacc
-    """
-    hist = np.zeros((n_class, n_class))
-    for lt, lp in zip(label_trues, label_preds):
-        hist += _fast_hist(lt.flatten(), lp.flatten(), n_class)
-    acc = np.diag(hist).sum() / hist.sum()
-    acc_cls = np.diag(hist) / hist.sum(axis=1)
-    acc_cls = np.nanmean(acc_cls)
-    iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-    mean_iu = np.nanmean(iu)
-    freq = hist.sum(axis=1) / hist.sum()
-    fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
-    return acc, acc_cls, mean_iu, fwavacc
+def get_pixacc_miou(total_correct, total_label, total_inter, total_union):
+    pixAcc = 1.0 * total_correct / (np.spacing(1) + total_label)
+    IoU = 1.0 * total_inter / (np.spacing(1) + total_union)
+    mIoU = IoU.mean()
+    return pixAcc, mIoU
+    
 
-def iou_score(scores, label):
-    iou = 0
-    acc = 0
-    acc_cls = 0
-    eval_iou = 0
-    eval_acc = 0
-    eval_acc_cls = 0
-    tmp = scores.max(dim=1)
-    label_pred = tmp[1].data.cpu().numpy()
-    label_true = label.data.cpu().numpy()
-    for lbt, lbp in zip(label_true, label_pred):
-        acc, acc_cls, iou, _ = label_accuracy_score(lbt, lbp, scores.shape[1])
-        eval_iou += iou
-        eval_acc += acc
-        eval_acc_cls += acc_cls
-    return eval_acc / label.shape[0], eval_acc_cls / label.shape[0], eval_iou / label.shape[0]
+class SegmentationMetric(object):
+    """Computes pixAcc and mIoU metric scroes
+    """
+    def __init__(self, nclass):
+        self.nclass = nclass
+        self.reset()
 
-def evaluate_accuracy(data_iter ,net, lossf, device):
+    def update(self, labels, scores):
+        def evaluate_worker(self, labels, scores):
+            correct, labeled = batch_pix_accuracy(
+                scores, labels)
+            inter, union = batch_intersection_union(
+                scores, labels, self.nclass)
+            self.total_correct += correct
+            self.total_label += labeled
+            self.total_inter += inter
+            self.total_union += union
+            return
+
+        if isinstance(scores, torch.Tensor):
+            evaluate_worker(self, labels, scores)
+        else:
+            raise NotImplemented
+
+    def get_all(self):
+        return self.total_correct, self.total_label, self.total_inter, self.total_union
+
+    def get(self):
+        return get_pixacc_miou(self.total_correct, self.total_label, self.total_inter, self.total_union)
+ 
+    def reset(self):
+        self.total_inter = 0
+        self.total_union = 0
+        self.total_correct = 0
+        self.total_label = 0
+        return
+
+def batch_pix_accuracy(scores, target):
+    """Batch Pixel Accuracy
+    Args:
+        predict: input 4D tensor
+        target: label 3D tensor
     """
-    Inputs:
-    - data_iter:
-    - net:
-    - lossf:
-    - device:
+    _, predict = torch.max(scores, 1)
+
+    predict = predict.cpu().numpy().astype('int64') + 1
+    target = target.cpu().numpy().astype('int64') + 1
+
+    pixel_labeled = np.sum(target > 0)
+    pixel_correct = np.sum((predict == target)*(target > 0))
+    assert pixel_correct <= pixel_labeled, \
+        "Correct area should be smaller than Labeled"
+    return pixel_correct, pixel_labeled
+
+
+def batch_intersection_union(scores, target, nclass):
+    """Batch Intersection of Union
+    Args:
+        predict: input 4D tensor
+        target: label 3D tensor
+        nclass: number of categories (int)
     """
-    assert isinstance(net, nn.Module)
-    loss, acc, acc_cls, mean_iu, fwavacc = 0, 0, 0, 0, 0
-    eval_acc, eval_acc_cls, eval_mean_iu, eval_fwavacc = 0, 0, 0, 0
-    loss_sum, n = 0.0, 0
-    cnt = 0
-    for X, y in data_iter:
-        cnt += 1
-        X = X.to(device)
-        y = y.to(device)
-        y_hat = net(X)
-        l = lossf(y_hat, y)
-        loss += l.cpu().item()
-        tmp = y_hat.max(dim=1)
-        label_pred = tmp[1].data.cpu().numpy()
-        label_true = y.data.cpu().numpy()
-        for lbt, lbp in zip(label_true, label_pred):
-            acc, acc_cls, mean_iu, fwavacc = label_accuracy_score(lbt, lbp, y_hat.shape[1])
-            eval_acc += acc
-            eval_acc_cls += acc_cls
-            eval_mean_iu += mean_iu
-            eval_fwavacc += fwavacc
-        n += y.shape[0]
-    return loss / cnt, eval_acc / n, eval_acc_cls / n, eval_mean_iu / n, eval_fwavacc / n
+    _, predict = torch.max(scores, 1)
+    mini = 1
+    maxi = nclass
+    nbins = nclass
+    predict = predict.cpu().numpy().astype('int64') + 1
+    target = target.cpu().numpy().astype('int64') + 1
+
+    predict = predict * (target > 0).astype(predict.dtype)
+    intersection = predict * (predict == target)
+    # areas of intersection and union
+    area_inter, _ = np.histogram(intersection, bins=nbins, range=(mini, maxi))
+    area_pred, _ = np.histogram(predict, bins=nbins, range=(mini, maxi))
+    area_lab, _ = np.histogram(target, bins=nbins, range=(mini, maxi))
+    area_union = area_pred + area_lab - area_inter
+    assert (area_inter <= area_union).all(), \
+        "Intersection area should be smaller than Union area"
+    return area_inter, area_union
+
+
+# ref https://github.com/CSAILVision/sceneparsing/blob/master/evaluationCode/utils_eval.py
+def pixel_accuracy(im_pred, im_lab):
+    im_pred = np.asarray(im_pred)
+    im_lab = np.asarray(im_lab)
+
+    # Remove classes from unlabeled pixels in gt image. 
+    # We should not penalize detections in unlabeled portions of the image.
+    pixel_labeled = np.sum(im_lab > 0)
+    pixel_correct = np.sum((im_pred == im_lab) * (im_lab > 0))
+    #pixel_accuracy = 1.0 * pixel_correct / pixel_labeled
+    return pixel_correct, pixel_labeled
+
+
+def intersection_and_union(im_pred, im_lab, num_class):
+    im_pred = np.asarray(im_pred)
+    im_lab = np.asarray(im_lab)
+    # Remove classes from unlabeled pixels in gt image. 
+    im_pred = im_pred * (im_lab > 0)
+    # Compute area intersection:
+    intersection = im_pred * (im_pred == im_lab)
+    area_inter, _ = np.histogram(intersection, bins=num_class-1,
+                                        range=(1, num_class - 1))
+    # Compute area union: 
+    area_pred, _ = np.histogram(im_pred, bins=num_class-1,
+                                range=(1, num_class - 1))
+    area_lab, _ = np.histogram(im_lab, bins=num_class-1,
+                               range=(1, num_class - 1))
+    area_union = area_pred + area_lab - area_inter
+    return area_inter, area_union

@@ -17,7 +17,7 @@ class VOC2011Segmentation(BaseDataset):
     NUM_CLASS = 21
     INPUT_CHANNELS = 3
     #白边，需要忽略
-    IGNORE_INDEX =255
+    IGNORE_INDEX =-1
 
     BASE_DIR = 'VOC2011'
     def __init__(self, root, split='train', mode=None, transform=None, 
@@ -81,7 +81,7 @@ class VOC2011Segmentation(BaseDataset):
 
     def _mask_transform(self, mask):
         target = np.array(mask).astype('int32')
-        # # target[target == 255] = -1
+        target[target == 255] = -1
         # target[target == 255] = 0
         return torch.from_numpy(target).long()
 
@@ -97,7 +97,7 @@ class VOC2012Segmentation(BaseDataset):
     ]
     NUM_CLASS = 21
     INPUT_CHANNELS = 3
-    IGNORE_INDEX =255
+    IGNORE_INDEX = -1
     BASE_DIR = 'VOC2012'
     def __init__(self, root, split='train', mode=None, transform=None, 
                  target_transform=None, **kwargs):
@@ -157,7 +157,7 @@ class VOC2012Segmentation(BaseDataset):
 
     def _mask_transform(self, mask):
         target = np.array(mask).astype('int32')
-        # target[target == 255] = -1
+        target[target == 255] = -1
         # #t#arget[target == 255] = 0
         return torch.from_numpy(target).long()
 
