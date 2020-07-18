@@ -1,0 +1,27 @@
+#!/bin/bash
+source /home/zqzhou/disk/miniconda3/bin/activate learn
+python fcn/train.py \
+--cuda True \
+--gpu_id 0 \
+--dataset vocaug \
+--lr 7e-4 \
+--weight_decay 0 \
+--fuse_attention True \
+--batch_size 16 \
+--arch FCN8s \
+--test_imgs_dir test_imgs \
+--data_dir Datasets \
+--ratio 1 \
+--base_size  354 \
+--crop_size 256 \
+--scale True \
+--epochs 250 \
+--optimizer SGD \
+--momentum 0.9 \
+--scheduler  Poly \
+--min_lr 5e-6 \
+--patience 5 \
+--lr_gamma 0.5 \
+--random_seed 1337 \
+--checkpoint_PATH  exps/FCN8s_vocaug/200714_163851_SGD_lr_1e-03_wd_0e+00_fa_True/model.pth \
+--only_read_model False \
