@@ -10,6 +10,6 @@ Desktop.ini
 ._sync*
 Help document.txt
 test.py
-tmp/*
+tmp
 *.tgz
 .*
