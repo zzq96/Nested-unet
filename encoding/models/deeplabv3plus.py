@@ -31,7 +31,7 @@ def _AsppConv(in_channels, out_channels, kernel_size, stride=1, padding=0, dilat
     asppconv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=False),
             nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
     return asppconv
 
@@ -60,7 +60,7 @@ class AsppModule(nn.Module):
             nn.AdaptiveAvgPool2d((1,1)),
             nn.Conv2d(2048, 256, kernel_size=1, bias=False),
             nn.BatchNorm2d(256, momentum=bn_momentum),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.__init_weight()
@@ -84,10 +84,10 @@ class AsppModule(nn.Module):
                 m.bias.data.zero_()
 
 class Encoder(nn.Module):
-    def __init__(self, bn_momentum=0.1, output_stride=16):
+    def __init__(self, output_stride=16, bn_momentum=0.1):
         super(Encoder, self).__init__()
         self.ASPP = AsppModule(bn_momentum=bn_momentum, output_stride=output_stride)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout = nn.Dropout(0.5)
@@ -112,12 +112,12 @@ class Encoder(nn.Module):
                 m.bias.data.zero_()
 
 class Decoder(nn.Module):
-    def __init__(self, class_num, bn_momentum=0.1, fuse_attention=False, **kwargs):
+    def __init__(self, num_classes, bn_momentum=0.1, fuse_attention=False, **kwargs):
         super(Decoder, self).__init__()
         self.fuse_attention = fuse_attention
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(48, momentum=bn_momentum)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
         if self.fuse_attention:
@@ -131,7 +131,7 @@ class Decoder(nn.Module):
         self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         self.bn3 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout3 = nn.Dropout(0.1)
-        self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
+        self.conv4 = nn.Conv2d(256, num_classes, kernel_size=1)
 
 
         self._init_weight()
@@ -165,22 +165,33 @@ class Decoder(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
+class DeepLabV3PlusHead(nn.Module):
+    def __init__(self, num_classes, output_stride):
+        super(DeepLabV3PlusHead, self).__init__()
+        self.encoder = Encoder(output_stride=output_stride)
+        self.decoder = Decoder(num_classes=num_classes)
+    
+    def forward(self, x, low_level_features):
+        x = self.encoder(x)
+        x = self.decoder(x, low_level_features)
+        return x
+
 class DeepLabV3Plus(nn.Module):
     def __init__(self, num_classes,input_channels=3, backbone='resnet101', output_stride=16, pretrained=True, bn_momentum=0.1, freeze_bn=False, **kwargs):
         super(DeepLabV3Plus, self).__init__()
-        self.Resnet101 = get_resnet(arch = backbone, bn_momentum=bn_momentum, pretrained=pretrained, output_stride=output_stride)
-        self.encoder = Encoder(bn_momentum, output_stride)
-        self.decoder = Decoder(num_classes, bn_momentum, **kwargs)
+        self.pretrained = get_resnet(arch = backbone, pretrained=pretrained, output_stride=output_stride)
+        self.head = DeepLabV3PlusHead(num_classes, output_stride)
         #TODO: 每次epoch训练不是都会model.train（）吗
         if freeze_bn:
             self.freeze_bn()
             print("freeze bacth normalization successfully!")
 
     def forward(self, input):
-        x, low_level_features = self.Resnet101(input)
+        c1, _, _, c4 = self.pretrained(input)
 
-        x = self.encoder(x)
-        predict = self.decoder(x, low_level_features)
+        predict = self.head(c4, c1)
+        # x = self.encoder(x)
+        # predict = self.decoder(x, low_level_features)
         output= F.interpolate(predict, size=input.size()[2:4], mode='bilinear', align_corners=True)
         return output
 
