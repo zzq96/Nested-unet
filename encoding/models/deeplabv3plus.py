@@ -31,7 +31,7 @@ def _AsppConv(in_channels, out_channels, kernel_size, stride=1, padding=0, dilat
     asppconv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=False),
             nn.BatchNorm2d(out_channels, momentum=bn_momentum),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
     return asppconv
 
@@ -60,7 +60,7 @@ class AsppModule(nn.Module):
             nn.AdaptiveAvgPool2d((1,1)),
             nn.Conv2d(2048, 256, kernel_size=1, bias=False),
             nn.BatchNorm2d(256, momentum=bn_momentum),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
         self.__init_weight()
@@ -87,7 +87,7 @@ class Encoder(nn.Module):
     def __init__(self, output_stride=16, bn_momentum=0.1):
         super(Encoder, self).__init__()
         self.ASPP = AsppModule(bn_momentum=bn_momentum, output_stride=output_stride)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(256, momentum=bn_momentum)
         self.dropout = nn.Dropout(0.5)
@@ -117,7 +117,7 @@ class Decoder(nn.Module):
         self.fuse_attention = fuse_attention
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(48, momentum=bn_momentum)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
         if self.fuse_attention:

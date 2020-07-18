@@ -20,7 +20,7 @@ from encoding.utils.metrics import *
 from encoding.models import get_segmentation_model
 from encoding.utils.lr_scheduler import LR_Scheduler
 from encoding.datasets import get_segmentation_dataset
-from encoding.utils.utils import load_checkpoint, AverageMeter, str2bool
+from encoding.utils.utils import load_checkpoint, AverageMeter, str2bool, set_seed
 
 
 # ARCH_NAMES = archs.__all__
@@ -41,9 +41,8 @@ class Trainer(object):
         self.device = device
 
         #指定随机数
-        np.random.seed(args.random_seed)
-        torch.random.manual_seed(args.random_seed)
-        torch.cuda.manual_seed(args.random_seed)
+        set_seed(args.random_seed)
+        
         # args.log_name = str(args.checkname)
 
         #好像是可以加速
@@ -172,12 +171,14 @@ class Trainer(object):
             labels = labels.to(self.device)
             scores = self.model(X)
             loss = self.criterion(scores, labels)
-            self.metric.update(labels, scores)
-            avg_meters['loss'].update(loss.item(), X.size(0))
 
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+
+            with torch.no_grad():
+                self.metric.update(labels, scores)
+                avg_meters['loss'].update(loss.item(), X.size(0))
 
             postfix = OrderedDict([
                 ('loss', avg_meters['loss'].avg)
@@ -191,7 +192,7 @@ class Trainer(object):
         return OrderedDict([
                 ('loss', avg_meters['loss'].avg),
                 ('iou', mIoU),
-                ('acc', avg_meters['acc'].avg)
+                ('acc', pixAcc)
             ])
 
     def validate(self, epoch, is_visualize_segmentation=True):
@@ -217,7 +218,6 @@ class Trainer(object):
                 pbar.set_postfix(postfix)
                 pbar.update(1)
             pbar.close()
-        self.visualize_segmentation(epoch)
 
         pixAcc, mIoU = self.metric.get()
 
