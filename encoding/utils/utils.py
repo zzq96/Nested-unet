@@ -26,7 +26,8 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def load_checkpoint(model, checkpoint_PATH, epoch = None,  best_iou = None, optimizer = None):
-
+    
+    assert checkpoint_PATH is not None
     model_CKPT = torch.load(checkpoint_PATH)
     if epoch is not None:
         epoch = model_CKPT['epoch']

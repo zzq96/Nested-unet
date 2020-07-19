@@ -79,8 +79,9 @@ class Options():
         parser.add_argument('--log_root', type=str, default=None)
 
         # checking point
+        parser.add_argument('--ft', default=False, type=str2bool)
+        parser.add_argument('--resume', default=False, type=str2bool)
         parser.add_argument('--checkpoint_PATH', default=None)
-        parser.add_argument('--only_read_model', default=False, type=str2bool)
 
         #custom
         parser.add_argument('--fuse_attention', default=False, type=str2bool)

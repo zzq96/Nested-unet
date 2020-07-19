@@ -119,11 +119,12 @@ class Trainer(object):
 
 
         #checkpoint_PATH
-        if self.args.checkpoint_PATH is not None:
-            if self.args.only_read_model:
-                model, _, _, _, _ = load_checkpoint(self.model, self.args.checkpoint_PATH)
-            else:
-                self.model, self.epoch_begin, self.best_iou, self.optimizer= load_checkpoint(self.model, self.args.checkpoint_PATH, self.epoch_begin,  self.best_iou, self.optimizer)
+        if self.args.ft:
+            print('--------->finetune model!')
+            self.model, _, _, _ = load_checkpoint(self.model, self.args.checkpoint_PATH)
+        elif self.args.resume:
+            print('--------->resume model!')
+            self.model, self.epoch_begin, self.best_iou, self.optimizer= load_checkpoint(self.model, self.args.checkpoint_PATH, self.epoch_begin,  self.best_iou, self.optimizer)
 
         #在训练开始前看看输出是什么
         val_log = self.validate(epoch=-1, is_visualize_segmentation=True)

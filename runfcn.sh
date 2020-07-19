@@ -4,9 +4,9 @@ python fcn/train.py \
 --cuda True \
 --gpu_id 0 \
 --dataset vocaug \
---lr 7e-4 \
---weight_decay 0 \
---fuse_attention True \
+--lr 1e-3 \
+--weight_decay 5e-4 \
+--fuse_attention False \
 --batch_size 16 \
 --arch FCN8s \
 --test_imgs_dir test_imgs \
@@ -23,5 +23,6 @@ python fcn/train.py \
 --patience 5 \
 --lr_gamma 0.5 \
 --random_seed 1337 \
---checkpoint_PATH  exps/FCN8s_vocaug/200714_163851_SGD_lr_1e-03_wd_0e+00_fa_True/model.pth \
---only_read_model False \
+--resume False \
+--ft False \
+--checkpoint_PATH  fcn/.vocaug/200718_181005_SGD_lr_1e-03_wd_4e-04_fa_False/model.pth \

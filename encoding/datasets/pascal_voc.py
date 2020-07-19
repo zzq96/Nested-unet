@@ -30,7 +30,7 @@ class VOC2011Segmentation(BaseDataset):
         # train/val/test splits are pre-cut
         _splits_dir = os.path.join(_voc_root, 'ImageSets/Segmentation')
         if self.mode == 'train':
-            _split_f = os.path.join(_splits_dir, 'trainval.txt')
+            _split_f = os.path.join(_splits_dir, 'train.txt')
         elif self.mode == 'val':
             _split_f = os.path.join(_splits_dir, 'val.txt')
         elif self.mode == 'test':
