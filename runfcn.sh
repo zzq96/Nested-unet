@@ -2,7 +2,7 @@
 source /home/zqzhou/disk/miniconda3/bin/activate learn
 python fcn/train.py \
 --cuda True \
---gpu_id 0 \
+--gpu_id 1 \
 --dataset vocaug \
 --lr 1e-3 \
 --weight_decay 5e-4 \
