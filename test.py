@@ -8,6 +8,7 @@ import os
 from PIL import Image
 
 img_dir = './SegmentationClassAug'
+
 palette = Image.open('Datasets/VOC2012/SegmentationClass/2007_000032.png').getpalette()
 for filename in os.listdir(img_dir):
     if 'png' not in filename:
